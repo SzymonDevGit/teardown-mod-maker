@@ -148,6 +148,6 @@ def test_my_blocks_cannot_take_teardown_names():
     # Every game function the mod calls must be reserved, so a kid's block or variable can't replace it.
     reserved = BLOCKS_JS.split("const TEARDOWN_NAMES = [", 1)[1].split("];", 1)[0]
     reserved = set(re.findall(r'"(\w+)"', reserved))
-    called = set(re.findall(r"\b([A-Z][A-Za-z]+)\(", BLOCKS_JS)) - {"FN", "Number", "String", "Set"}
+    called = set(re.findall(r"\b([A-Z][A-Za-z]+)\(", BLOCKS_JS)) - {"FN", "Number", "String", "Set", "Map", "Boolean"}
     assert called - reserved == set()
     assert {"init", "tick", "update", "draw"} <= reserved

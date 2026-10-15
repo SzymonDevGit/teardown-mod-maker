@@ -175,7 +175,7 @@
   let needs = new Set();
 
   // Global names the helpers use, so a kid's variable can't clash with them.
-  L.addReservedWords("td_slowmo,td_timers,td_screen,td_lights,td_sounds,td_every,dt");
+  L.addReservedWords("td_slowmo,td_timers,td_screen,td_lights,td_sounds,td_every,td_depth,dt");
 
   // "My blocks" become Lua functions named by the kid. Make sure no name takes over a Teardown callback
   // (a My block called "update" would run by itself every frame) or a game function the mod calls
@@ -193,6 +193,12 @@
     "UiPush", "UiText", "UiTextOutline", "UiTranslate", "Vec", "VecAdd", "VecLength", "VecScale",
   ];
   L.addReservedWords(TEARDOWN_NAMES.join(","));
+
+  const safeName = Blockly.Names.prototype.safeName;
+  Blockly.Names.prototype.safeName = function (name) {
+    const plain = String(name).replace(/ł/g, "l").replace(/Ł/g, "L").normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+    return safeName.call(this, plain);
+  };
 
   const helper = (name, code) => L.provideFunction_(name, code.replace("FN", L.FUNCTION_NAME_PLACEHOLDER_));
 
@@ -255,14 +261,17 @@ function FN(direction, power)
 end`);
 
   const spawnBoxFn = () => helper("td_spawnBox", `
-function FN(material, metres, pos)
+function FN(material, metres, pos, onSurface)
   local voxels = math.max(1, math.min(50, math.floor(metres * 10 + 0.5)))
   local half = voxels * 0.05
-  -- Sit the box on top of the spot and pull it back towards me, so it doesn't start inside a wall or the floor.
-  local dir = TransformToParentVec(GetCameraTransform(), Vec(0, 0, -1))
-  local flat = math.sqrt(dir[1] * dir[1] + dir[3] * dir[3])
+  -- The box sits on top of the spot. On a spot I'm looking at, pull it back towards me
+  -- so it doesn't start inside the wall or floor I'm looking at.
   local back = Vec(0, 0, 0)
-  if flat > 0.01 then back = VecScale(Vec(dir[1], 0, dir[3]), (half + 0.05) / flat) end
+  if onSurface then
+    local dir = TransformToParentVec(GetCameraTransform(), Vec(0, 0, -1))
+    local flat = math.sqrt(dir[1] * dir[1] + dir[3] * dir[3])
+    if flat > 0.01 then back = VecScale(Vec(dir[1], 0, dir[3]), (half + 0.05) / flat) end
+  end
   local corner = VecAdd(pos, Vec(-half, 0.05, -half))
   local xml = "<voxbox size='" .. voxels .. " " .. voxels .. " " .. voxels .. "' prop='true' material='" .. material .. "'/>"
   Spawn(xml, Transform(VecAdd(corner, VecScale(back, -1))))
@@ -308,7 +317,32 @@ function FN(kind, pos)
 end`);
 
   const val = (block, name, fallback) => L.valueToCode(block, name, O.NONE) || fallback;
-  const where = (block) => val(block, "WHERE", `${lookPointFn()}()`);
+
+  // Variables and My blocks can hold anything (variables start at 0, and a kid may store text).
+  // Number and place inputs only trust blocks that always give a number or a place;
+  // anything else is checked when the mod runs, so a wrong value can't crash it.
+  const gives = (block, name, type) => {
+    const target = block.getInputTargetBlock(name);
+    const check = target && target.outputConnection && target.outputConnection.getCheck();
+    return Boolean(check && check.includes(type));
+  };
+  const numberIn = (block, name, fallback, order = O.NONE) => {
+    const code = L.valueToCode(block, name, gives(block, name, "Number") ? order : O.NONE);
+    if (!code) return fallback;
+    return gives(block, name, "Number") ? code : `(tonumber(${code}) or ${fallback})`;
+  };
+  const placeFn = () => helper("td_place", `
+function FN(pos)
+  if type(pos) == "table" and type(pos[1]) == "number" and type(pos[2]) == "number" and type(pos[3]) == "number" then
+    return pos
+  end
+  return ${lookPointFn()}()
+end`);
+  const where = (block) => {
+    const code = L.valueToCode(block, "WHERE", O.NONE);
+    if (!code) return `${lookPointFn()}()`;
+    return gives(block, "WHERE", "Place") ? code : `${placeFn()}(${code})`;
+  };
   const luaString = (text) => JSON.stringify(String(text));
   const clamp = (code, min, max) => `math.max(${min}, math.min(${max}, ${code}))`;
 
@@ -317,8 +351,8 @@ end`);
   for (const type of EVENT_TYPES) L.forBlock[type] = () => "";
 
   // Actions
-  L.forBlock.td_explode = (b) => `Explosion(${where(b)}, ${clamp(val(b, "SIZE", "2"), 0.5, 4)})\n`;
-  L.forBlock.td_hole = (b) => `do local td_s = ${val(b, "SIZE", "1")} MakeHole(${where(b)}, td_s, td_s * 0.7, td_s * 0.4) end\n`;
+  L.forBlock.td_explode = (b) => `Explosion(${where(b)}, ${clamp(numberIn(b, "SIZE", "2"), 0.5, 4)})\n`;
+  L.forBlock.td_hole = (b) => `do local td_s = ${clamp(numberIn(b, "SIZE", "1"), 0, 5)} MakeHole(${where(b)}, td_s, td_s * 0.7, td_s * 0.4) end\n`;
   L.forBlock.td_fire = (b) => `SpawnFire(${where(b)})\n`;
   L.forBlock.td_shoot = (b) => {
     const kind = ["bullet", "rocket", "shotgun"].includes(b.getFieldValue("KIND")) ? b.getFieldValue("KIND") : "bullet";
@@ -326,7 +360,7 @@ end`);
   };
   L.forBlock.td_paint = (b) => {
     const kind = b.getFieldValue("KIND") === "explosion" ? "explosion" : "spraycan";
-    return `Paint(${where(b)}, ${clamp(val(b, "SIZE", "1"), 0, 5)}, "${kind}")\n`;
+    return `Paint(${where(b)}, ${clamp(numberIn(b, "SIZE", "1"), 0, 5)}, "${kind}")\n`;
   };
   L.forBlock.td_shake = (b) => `ShakeCamera(${Number(b.getFieldValue("STRENGTH")) || 0.5})\n`;
   L.forBlock.td_sound = (b) => `${playSoundFn()}(${luaString(b.getFieldValue("SOUND"))})\n`;
@@ -334,18 +368,19 @@ end`);
 
   // Player (health in Teardown goes from 0 to 1; the blocks use 0 to 100 so it reads like a percent)
   L.forBlock.td_launch = (b) =>
-    `do local td_v = GetPlayerVelocity() SetPlayerVelocity(Vec(td_v[1], ${val(b, "POWER", "10")}, td_v[3])) end\n`;
-  L.forBlock.td_push_me = (b) => `${pushMeFn()}(${luaString(b.getFieldValue("DIR"))}, ${val(b, "POWER", "10")})\n`;
+    `do local td_v = GetPlayerVelocity() SetPlayerVelocity(Vec(td_v[1], ${clamp(numberIn(b, "POWER", "10"), -100, 100)}, td_v[3])) end\n`;
+  L.forBlock.td_push_me = (b) => `${pushMeFn()}(${luaString(b.getFieldValue("DIR"))}, ${clamp(numberIn(b, "POWER", "10"), -100, 100)})\n`;
   // Keep the way the player is facing, or every teleport would turn the camera.
   L.forBlock.td_teleport = (b) => `SetPlayerTransform(Transform(${where(b)}, GetPlayerTransform().rot))\n`;
-  L.forBlock.td_set_health = (b) => `SetPlayerHealth(${clamp(`(${val(b, "VALUE", "100")}) / 100`, 0, 1)})\n`;
+  L.forBlock.td_set_health = (b) => `SetPlayerHealth(${clamp(`(${numberIn(b, "VALUE", "100")}) / 100`, 0, 1)})\n`;
   L.forBlock.td_change_health = (b) =>
-    `SetPlayerHealth(${clamp(`GetPlayerHealth() + (${val(b, "VALUE", "10")}) / 100`, 0, 1)})\n`;
+    `SetPlayerHealth(${clamp(`GetPlayerHealth() + (${numberIn(b, "VALUE", "10")}) / 100`, 0, 1)})\n`;
   L.forBlock.td_slowmo = (b) => {
     needs.add("slowmo");
-    return `td_slowmo = ${val(b, "SECONDS", "3")}\n`;
+    return `td_slowmo = ${numberIn(b, "SECONDS", "3")}\n`;
   };
-  L.forBlock.td_health = () => ["(GetPlayerHealth() * 100)", O.ATOMIC];
+  // Rounded to a whole number, so "my health = 100" works and messages don't show long decimals.
+  L.forBlock.td_health = () => ["math.floor(GetPlayerHealth() * 100 + 0.5)", O.HIGH];
   L.forBlock.td_speed = () => ["(math.floor(VecLength(GetPlayerVelocity()) * 10 + 0.5) / 10)", O.ATOMIC];
   L.forBlock.td_key_held = (b) => [`InputDown(${luaString(b.getFieldValue("KEY"))})`, O.HIGH];
   L.forBlock.td_on_ground = () => ["IsPlayerGrounded()", O.HIGH];
@@ -353,12 +388,12 @@ end`);
   // Places
   L.forBlock.td_look_point = () => [`${lookPointFn()}()`, O.HIGH];
   L.forBlock.td_my_pos = () => ["GetPlayerTransform().pos", O.HIGH];
-  L.forBlock.td_in_front = (b) => [`${inFrontFn()}(${val(b, "DIST", "3")})`, O.HIGH];
-  L.forBlock.td_above = (b) => [`VecAdd(${where(b)}, Vec(0, ${val(b, "DIST", "2")}, 0))`, O.HIGH];
-  L.forBlock.td_random_near = (b) => [`${randomNearFn()}(${val(b, "DIST", "5")}, ${where(b)})`, O.HIGH];
+  L.forBlock.td_in_front = (b) => [`${inFrontFn()}(${clamp(numberIn(b, "DIST", "3"), -100, 100)})`, O.HIGH];
+  L.forBlock.td_above = (b) => [`VecAdd(${where(b)}, Vec(0, ${clamp(numberIn(b, "DIST", "2"), -100, 100)}, 0))`, O.HIGH];
+  L.forBlock.td_random_near = (b) => [`${randomNearFn()}(${clamp(numberIn(b, "DIST", "5"), 0, 100)}, ${where(b)})`, O.HIGH];
 
   // Timers
-  L.forBlock.td_after = (b) => `${afterFn()}(${val(b, "SECONDS", "1")}, function()\n${L.statementToCode(b, "DO")}end)\n`;
+  L.forBlock.td_after = (b) => `${afterFn()}(${numberIn(b, "SECONDS", "1")}, function()\n${L.statementToCode(b, "DO")}end)\n`;
   L.forBlock.td_time = () => ["(math.floor(GetTime() * 10 + 0.5) / 10)", O.ATOMIC];
 
   // Screen
@@ -384,12 +419,14 @@ end`);
   };
 
   // Objects
-  L.forBlock.td_push_thing = (b) => `${pushTargetFn()}(${val(b, "POWER", "10")})\n`;
+  L.forBlock.td_push_thing = (b) => `${pushTargetFn()}(${clamp(numberIn(b, "POWER", "10"), -100, 100)})\n`;
   L.forBlock.td_delete_thing = () => `do local body = ${lookTargetFn()}() if body ~= 0 then Delete(body) end end\n`;
   L.forBlock.td_spawn_box = (b) => {
     const material = ["wood", "metal", "glass", "masonry", "plastic"].includes(b.getFieldValue("MATERIAL"))
       ? b.getFieldValue("MATERIAL") : "wood";
-    return `${spawnBoxFn()}("${material}", ${val(b, "SIZE", "1")}, ${where(b)})\n`;
+    const target = b.getInputTargetBlock("WHERE");
+    const onSurface = !target || target.type === "td_look_point";
+    return `${spawnBoxFn()}("${material}", ${numberIn(b, "SIZE", "1")}, ${where(b)}, ${onSurface})\n`;
   };
   L.forBlock.td_gravity = (b) => `SetGravity(Vec(0, ${GRAVITY[b.getFieldValue("GRAVITY")] ?? -10}, 0))\n`;
   L.forBlock.td_looking_at_thing = () => [`(${lookTargetFn()}() ~= 0)`, O.ATOMIC];
@@ -427,8 +464,90 @@ end`);
     return parts.length ? [parts.join(" .. "), O.CONCATENATION] : ["''", O.ATOMIC];
   };
 
+  // Maths and "bigger than" only work on numbers, so a variable holding text counts as 0 instead of crashing.
+  const ARITHMETIC = {
+    ADD: [" + ", O.ADDITIVE], MINUS: [" - ", O.ADDITIVE], MULTIPLY: [" * ", O.MULTIPLICATIVE],
+    DIVIDE: [" / ", O.MULTIPLICATIVE], POWER: [" ^ ", O.EXPONENTIATION],
+  };
+  L.forBlock.math_arithmetic = (b) => {
+    const [op, order] = ARITHMETIC[b.getFieldValue("OP")] || ARITHMETIC.ADD;
+    return [numberIn(b, "A", "0", order) + op + numberIn(b, "B", "0", order), order];
+  };
+  const compareText = L.forBlock.logic_compare;
+  L.forBlock.logic_compare = (b, generator) => {
+    const op = { LT: "<", LTE: "<=", GT: ">", GTE: ">=" }[b.getFieldValue("OP")];
+    if (!op) return compareText(b, generator);
+    return [`${numberIn(b, "A", "0", O.RELATIONAL)} ${op} ${numberIn(b, "B", "0", O.RELATIONAL)}`, O.RELATIONAL];
+  };
+  // Lua's math.random stops the mod if "from" is bigger than "to", so swap them.
+  const randomFn = () => helper("td_random", `
+function FN(from, to)
+  from, to = math.floor(from), math.floor(to)
+  if from > to then from, to = to, from end
+  return math.random(from, to)
+end`);
+  L.forBlock.math_random_int = (b) => [`${randomFn()}(${numberIn(b, "FROM", "1")}, ${numberIn(b, "TO", "10")})`, O.HIGH];
+  L.forBlock.controls_repeat_ext = (b) => {
+    const times = numberIn(b, "TIMES", "0");
+    const count = L.nameDB_.getDistinctName("count", Blockly.Names.NameType.VARIABLE);
+    const body = L.addLoopTrap(L.statementToCode(b, "DO"), b);
+    // At most 100 times, so "repeat 100000 times: explode" can't freeze the game.
+    const limit = /^\d+$/.test(times) ? String(Math.min(Number(times), 100)) : `math.min(100, math.floor(${times}))`;
+    return `for ${count} = 1, ${limit} do\n${body}end\n`;
+  };
+
+  // A My block that uses itself (or goes round through other My blocks) would never stop and crash the mod.
+  // Calls to such blocks go through td_call, which stops 100 levels deep.
+  let loopingBlocks = new Set();
+  const callGuardFn = () => {
+    needs.add("calls");
+    return helper("td_call", `
+function FN(myBlock, ...)
+  if td_depth >= 100 then return 0 end
+  td_depth = td_depth + 1
+  local result = myBlock(...)
+  td_depth = td_depth - 1
+  return result
+end`);
+  };
+  const callMyBlock = L.forBlock.procedures_callreturn;
+  L.forBlock.procedures_callreturn = (b, generator) => {
+    const [code, order] = callMyBlock(b, generator);
+    if (!loopingBlocks.has(b.getFieldValue("NAME"))) return [code, order];
+    const open = code.indexOf("(");
+    const args = code.slice(open + 1, -1);
+    return [`${callGuardFn()}(${code.slice(0, open)}${args ? ", " + args : ""})`, O.HIGH];
+  };
+
+  // Names of the My blocks that can end up using themselves.
+  function findLoopingBlocks(workspace) {
+    const uses = new Map();
+    for (const def of workspace.getTopBlocks(false)) {
+      if (!def.type.startsWith("procedures_def")) continue;
+      const called = def.getDescendants(false)
+        .filter((b) => b.type.startsWith("procedures_call"))
+        .map((b) => b.getFieldValue("NAME"));
+      uses.set(def.getFieldValue("NAME"), called);
+    }
+    const looping = new Set();
+    for (const start of uses.keys()) {
+      const seen = new Set();
+      const stack = [...(uses.get(start) || [])];
+      while (stack.length) {
+        const name = stack.pop();
+        if (name === start) { looping.add(start); break; }
+        if (seen.has(name)) continue;
+        seen.add(name);
+        stack.push(...(uses.get(name) || []));
+      }
+    }
+    return looping;
+  }
+
   function toolId(name, used) {
-    let base = name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24) || "tool";
+    // Polish letters become plain ones (ż -> z), so "Różdżka" gets the id "tmmrozdzka", not "tmmrdka".
+    const plain = name.toLowerCase().replace(/ł/g, "l").normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+    let base = plain.replace(/[^a-z0-9]+/g, "").slice(0, 24) || "tool";
     base = "tmm" + base;
     let id = base;
     for (let n = 2; used.has(id); n++) id = base + n;
@@ -436,12 +555,13 @@ end`);
     return id;
   }
 
-  const indent = (code) => L.prefixLines(code, L.INDENT);
+  const indent = (code) => (code ? L.prefixLines(code, L.INDENT) : "");
 
   // Turns the whole workspace into one main.lua file.
   window.buildLua = function (workspace) {
     L.init(workspace);
     needs = new Set();
+    loopingBlocks = findLoopingBlocks(workspace);
     const init = [];
     const tick = [];
     const state = [];
@@ -485,7 +605,7 @@ end`);
           break;
         }
         case "td_tool": {
-          const name = block.getFieldValue("NAME") || "Tool";
+          const name = block.getFieldValue("NAME").trim() || B.tool_no_name;
           const id = toolId(name, toolIds);
           init.push(`  RegisterTool("${id}", ${luaString(name)}, "MOD/vox/tool.vox")\n  SetBool("game.tool.${id}.enabled", true)\n`);
           tick.push(
@@ -521,9 +641,11 @@ end`);
         "  end\n"
       );
     }
+    // Lights are drawn after the events, so a light added this frame shows straight away.
+    const afterEvents = [];
     if (needs.has("lights")) {
       state.push("td_lights = {}");
-      everyFrame.push(
+      afterEvents.push(
         "  for _, light in ipairs(td_lights) do\n" +
         "    PointLight(light.pos, light.r, light.g, light.b, 3)\n" +
         "  end\n"
@@ -534,6 +656,7 @@ end`);
       state.push(`${L.getVariableName(variable.getId())} = 0`);
     }
     if (needs.has("sounds")) state.push("td_sounds = {}");
+    if (needs.has("calls")) state.push("td_depth = 0");
     if (needs.has("screen")) state.push("td_screen = {}");
     if (everyCount) state.unshift("td_every = {}");
 
@@ -543,7 +666,7 @@ end`);
     if (state.length) parts.push(state.join("\n"));
     if (helpers) parts.push(helpers);
     parts.push(`function init()\n${init.join("")}end`);
-    parts.push(`function tick(dt)\n${everyFrame.join("")}${tick.join("")}end`);
+    parts.push(`function tick(dt)\n${everyFrame.join("")}${tick.join("")}${afterEvents.join("")}end`);
     if (needs.has("screen")) {
       parts.push(
         "function draw()\n" +
@@ -564,7 +687,8 @@ end`);
     return parts.join("\n\n") + "\n";
   };
 
-  window.hasEventBlocks = (workspace) => workspace.getTopBlocks(false).some((b) => EVENT_TYPES.has(b.type));
+  window.hasEventBlocks = (workspace) =>
+    workspace.getTopBlocks(false).some((b) => EVENT_TYPES.has(b.type) && b.isEnabled());
 
   const shadowPlace = { shadow: { type: "td_look_point" } };
   const num = (n) => ({ shadow: { type: "math_number", fields: { NUM: n } } });
