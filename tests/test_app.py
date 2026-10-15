@@ -1,7 +1,9 @@
 import base64
 import io
+import re
 import struct
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -94,3 +96,40 @@ def test_default_vox_is_valid_magicavoxel():
     content_size, children_size = struct.unpack("<ii", vox[12:20])
     assert content_size == 0
     assert 20 + children_size == len(vox)
+
+
+BLOCKS_JS = (Path(__file__).resolve().parent.parent / "static" / "js" / "blocks.js").read_text(encoding="utf-8")
+
+
+def block_terms():
+    body = BLOCKS_JS.split("window.BLOCK_TERMS = {", 1)[1].split("};", 1)[0]
+    return dict(re.findall(r"(\w+): \"(\w+)\"", body))
+
+
+def test_every_teardown_block_has_hold_t_help():
+    defined = set(re.findall(r'(?:eventBlock|actionBlock|valueBlock)\("(td_\w+)"', BLOCKS_JS))
+    defined |= set(re.findall(r'type: "(td_\w+)",\n', BLOCKS_JS))
+    terms = block_terms()
+    assert defined, "no blocks found in blocks.js"
+    assert defined - terms.keys() == set()
+    for lang in ("en", "pl"):
+        assert set(terms.values()) - TRANSLATIONS[lang]["terms"].keys() == set()
+
+
+def test_every_block_text_and_category_is_translated():
+    used = set(re.findall(r"\bB\.(\w+)", BLOCKS_JS))
+    light_colours = BLOCKS_JS.split("const LIGHT_COLOURS = {", 1)[1].split("};", 1)[0]
+    used |= {"colour_" + c for c in re.findall(r"(\w+): \[", light_colours)}
+    categories = set(re.findall(r'category\("(\w+)"', BLOCKS_JS)) | set(re.findall(r"\bC\.(\w+)", BLOCKS_JS))
+    item_ids = set(re.findall(r'toolboxitemid: "(\w+)"', BLOCKS_JS)) | set(re.findall(r'category\("(\w+)"', BLOCKS_JS))
+    for lang in ("en", "pl"):
+        assert used - TRANSLATIONS[lang]["blocks"].keys() == set()
+        assert categories - TRANSLATIONS[lang]["categories"].keys() == set()
+        assert item_ids - TRANSLATIONS[lang]["terms"].keys() == set()
+
+
+def test_block_messages_have_matching_placeholders():
+    # Blockly needs the same %1, %2... in every language, or the block breaks.
+    for key, english in TRANSLATIONS["en"]["blocks"].items():
+        polish = TRANSLATIONS["pl"]["blocks"][key]
+        assert sorted(re.findall(r"%\d", english)) == sorted(re.findall(r"%\d", polish)), key
