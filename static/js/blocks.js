@@ -7,6 +7,13 @@
   const L = lua.luaGenerator;
   const O = lua.Order;
 
+  // Blockly's own word on the "My blocks" blocks, so it matches the hold-T help.
+  Blockly.Msg.PROCEDURES_DEFNORETURN_TITLE = B.my_block;
+  Blockly.Msg.PROCEDURES_DEFRETURN_TITLE = B.my_block;
+  // No "Describe this function..." note on every new My block.
+  Blockly.Msg.PROCEDURES_DEFNORETURN_COMMENT = "";
+  Blockly.Msg.PROCEDURES_DEFRETURN_COMMENT = "";
+
   const COLOURS = {
     events: "#e6a01e",
     actions: "#d9534f",
@@ -18,10 +25,10 @@
     effects: "#2aa198",
   };
 
+  // No number keys: Teardown uses them to switch tools, so the kid's tool would be put away.
   const KEYS = [
     ["E", "e"], ["F", "f"], ["Q", "q"], ["R", "r"], ["G", "g"],
-    ["Z", "z"], ["X", "x"], ["C", "c"], ["V", "v"],
-    ["1", "1"], ["2", "2"], ["3", "3"],
+    ["Z", "z"], ["X", "x"], ["C", "c"], ["V", "v"], ["H", "h"], ["B", "b"], ["N", "n"],
     [B.key_space, "space"], [B.key_shift, "shift"], [B.key_lmb, "lmb"], [B.key_rmb, "rmb"],
   ];
 
@@ -170,6 +177,23 @@
   // Global names the helpers use, so a kid's variable can't clash with them.
   L.addReservedWords("td_slowmo,td_timers,td_screen,td_lights,td_sounds,td_every,dt");
 
+  // "My blocks" become Lua functions named by the kid. Make sure no name takes over a Teardown callback
+  // (a My block called "update" would run by itself every frame) or a game function the mod calls
+  // (a My block called "Explosion" that explodes would call itself forever). Blockly adds a number instead.
+  const TEARDOWN_NAMES = [
+    "init", "tick", "update", "draw", "handleCommand",
+    "ApplyBodyImpulse", "DebugPrint", "Delete", "Explosion", "GetBodyMass", "GetBool", "GetCameraTransform",
+    "GetPlayerHealth", "GetPlayerTransform", "GetPlayerVelocity", "GetShapeBody", "GetString", "GetTime",
+    "InputDown", "InputPressed", "IsBodyDynamic", "IsPlayerGrounded", "LoadSound", "MakeHole", "Paint",
+    "ParticleColor", "ParticleEmissive", "ParticleGravity", "ParticleRadius", "ParticleReset", "ParticleType",
+    "PlaySound", "PointLight", "QueryRaycast", "RegisterTool", "SetBool", "SetEnvironmentProperty", "SetGravity",
+    "SetPlayerHealth", "SetPlayerTransform", "SetPlayerVelocity", "SetPostProcessingDefault",
+    "SetPostProcessingProperty", "SetTimeScale", "ShakeCamera", "Shoot", "Spawn", "SpawnFire", "SpawnParticle",
+    "Transform", "TransformToParentVec", "UiAlign", "UiCenter", "UiColor", "UiFont", "UiHeight", "UiPop",
+    "UiPush", "UiText", "UiTextOutline", "UiTranslate", "Vec", "VecAdd", "VecLength", "VecScale",
+  ];
+  L.addReservedWords(TEARDOWN_NAMES.join(","));
+
   const helper = (name, code) => L.provideFunction_(name, code.replace("FN", L.FUNCTION_NAME_PLACEHOLDER_));
 
   const lookPointFn = () => helper("td_lookPoint", `
@@ -234,8 +258,14 @@ end`);
 function FN(material, metres, pos)
   local voxels = math.max(1, math.min(50, math.floor(metres * 10 + 0.5)))
   local half = voxels * 0.05
+  -- Sit the box on top of the spot and pull it back towards me, so it doesn't start inside a wall or the floor.
+  local dir = TransformToParentVec(GetCameraTransform(), Vec(0, 0, -1))
+  local flat = math.sqrt(dir[1] * dir[1] + dir[3] * dir[3])
+  local back = Vec(0, 0, 0)
+  if flat > 0.01 then back = VecScale(Vec(dir[1], 0, dir[3]), (half + 0.05) / flat) end
+  local corner = VecAdd(pos, Vec(-half, 0.05, -half))
   local xml = "<voxbox size='" .. voxels .. " " .. voxels .. " " .. voxels .. "' prop='true' material='" .. material .. "'/>"
-  Spawn(xml, Transform(VecAdd(pos, Vec(-half, 0.05, -half))))
+  Spawn(xml, Transform(VecAdd(corner, VecScale(back, -1))))
 end`);
 
   const playSoundFn = () => {
@@ -283,13 +313,12 @@ end`);
   const clamp = (code, min, max) => `math.max(${min}, math.min(${max}, ${code}))`;
 
   // Event blocks are put together by buildLua, so they write nothing themselves.
-  for (const type of ["td_when_start", "td_every_frame", "td_when_key", "td_every_seconds", "td_tool"]) {
-    L.forBlock[type] = () => "";
-  }
+  const EVENT_TYPES = new Set(["td_when_start", "td_every_frame", "td_when_key", "td_every_seconds", "td_tool"]);
+  for (const type of EVENT_TYPES) L.forBlock[type] = () => "";
 
   // Actions
   L.forBlock.td_explode = (b) => `Explosion(${where(b)}, ${clamp(val(b, "SIZE", "2"), 0.5, 4)})\n`;
-  L.forBlock.td_hole = (b) => `do local s = ${val(b, "SIZE", "1")} MakeHole(${where(b)}, s, s * 0.7, s * 0.4) end\n`;
+  L.forBlock.td_hole = (b) => `do local td_s = ${val(b, "SIZE", "1")} MakeHole(${where(b)}, td_s, td_s * 0.7, td_s * 0.4) end\n`;
   L.forBlock.td_fire = (b) => `SpawnFire(${where(b)})\n`;
   L.forBlock.td_shoot = (b) => {
     const kind = ["bullet", "rocket", "shotgun"].includes(b.getFieldValue("KIND")) ? b.getFieldValue("KIND") : "bullet";
@@ -305,9 +334,10 @@ end`);
 
   // Player (health in Teardown goes from 0 to 1; the blocks use 0 to 100 so it reads like a percent)
   L.forBlock.td_launch = (b) =>
-    `do local v = GetPlayerVelocity() SetPlayerVelocity(Vec(v[1], ${val(b, "POWER", "10")}, v[3])) end\n`;
+    `do local td_v = GetPlayerVelocity() SetPlayerVelocity(Vec(td_v[1], ${val(b, "POWER", "10")}, td_v[3])) end\n`;
   L.forBlock.td_push_me = (b) => `${pushMeFn()}(${luaString(b.getFieldValue("DIR"))}, ${val(b, "POWER", "10")})\n`;
-  L.forBlock.td_teleport = (b) => `SetPlayerTransform(Transform(${where(b)}))\n`;
+  // Keep the way the player is facing, or every teleport would turn the camera.
+  L.forBlock.td_teleport = (b) => `SetPlayerTransform(Transform(${where(b)}, GetPlayerTransform().rot))\n`;
   L.forBlock.td_set_health = (b) => `SetPlayerHealth(${clamp(`(${val(b, "VALUE", "100")}) / 100`, 0, 1)})\n`;
   L.forBlock.td_change_health = (b) =>
     `SetPlayerHealth(${clamp(`GetPlayerHealth() + (${val(b, "VALUE", "10")}) / 100`, 0, 1)})\n`;
@@ -329,7 +359,7 @@ end`);
 
   // Timers
   L.forBlock.td_after = (b) => `${afterFn()}(${val(b, "SECONDS", "1")}, function()\n${L.statementToCode(b, "DO")}end)\n`;
-  L.forBlock.td_time = () => ["GetTime()", O.HIGH];
+  L.forBlock.td_time = () => ["(math.floor(GetTime() * 10 + 0.5) / 10)", O.ATOMIC];
 
   // Screen
   L.forBlock.td_screen_text = (b) => {
@@ -343,10 +373,11 @@ end`);
   };
   L.forBlock.td_filter = (b) => {
     switch (b.getFieldValue("FILTER")) {
+      // Each filter starts from normal, so one never keeps colours from another.
       case "grey":
-        return 'SetPostProcessingProperty("saturation", 0)\n';
+        return 'SetPostProcessingDefault()\nSetPostProcessingProperty("saturation", 0)\n';
       case "old":
-        return 'SetPostProcessingProperty("saturation", 0.4)\nSetPostProcessingProperty("colorbalance", 1.3, 1.0, 0.7)\n';
+        return 'SetPostProcessingDefault()\nSetPostProcessingProperty("saturation", 0.4)\nSetPostProcessingProperty("colorbalance", 1.3, 1.0, 0.7)\n';
       default:
         return "SetPostProcessingDefault()\n";
     }
@@ -367,7 +398,9 @@ end`);
   L.forBlock.td_light = (b) => {
     needs.add("lights");
     const [r, g, bl] = LIGHT_COLOURS[b.getFieldValue("COLOUR")] || LIGHT_COLOURS.white;
-    return `if #td_lights < 50 then table.insert(td_lights, { pos = ${where(b)}, r = ${r}, g = ${g}, b = ${bl} }) end\n`;
+    // At most 50 lights: a new one replaces the oldest.
+    return `if #td_lights >= 50 then table.remove(td_lights, 1) end\n` +
+      `table.insert(td_lights, { pos = ${where(b)}, r = ${r}, g = ${g}, b = ${bl} })\n`;
   };
   L.forBlock.td_lights_off = () => {
     needs.add("lights");
@@ -423,6 +456,11 @@ end`);
         L.blockToCode(block);
         continue;
       }
+      if (!EVENT_TYPES.has(block.type)) {
+        // A loose block outside any event block never runs.
+        unused++;
+        continue;
+      }
       const body = L.statementToCode(block, "DO");
       switch (block.type) {
         case "td_when_start":
@@ -456,8 +494,6 @@ end`);
           );
           break;
         }
-        default:
-          unused++;
       }
     }
 
@@ -466,12 +502,13 @@ end`);
     if (needs.has("timers")) {
       state.push("td_timers = {}");
       everyFrame.push(
-        "  for i = #td_timers, 1, -1 do\n" +
-        "    local timer = td_timers[i]\n" +
-        "    if GetTime() >= timer.time then\n" +
-        "      table.remove(td_timers, i)\n" +
-        "      timer.action()\n" +
+        // Timers that are due run in the order they were started.
+        "  do\n" +
+        "    local due = {}\n" +
+        "    for i = #td_timers, 1, -1 do\n" +
+        "      if GetTime() >= td_timers[i].time then table.insert(due, 1, table.remove(td_timers, i)) end\n" +
         "    end\n" +
+        "    for _, timer in ipairs(due) do timer.action() end\n" +
         "  end\n"
       );
     }
@@ -527,7 +564,6 @@ end`);
     return parts.join("\n\n") + "\n";
   };
 
-  const EVENT_TYPES = new Set(["td_when_start", "td_every_frame", "td_when_key", "td_every_seconds", "td_tool"]);
   window.hasEventBlocks = (workspace) => workspace.getTopBlocks(false).some((b) => EVENT_TYPES.has(b.type));
 
   const shadowPlace = { shadow: { type: "td_look_point" } };
@@ -614,7 +650,7 @@ end`);
           category("objects", COLOURS.objects, [
             block("td_push_thing", { POWER: num(10) }),
             block("td_delete_thing"),
-            block("td_spawn_box", { SIZE: num(1), WHERE: { shadow: { type: "td_in_front", inputs: { DIST: num(3) } } } }),
+            block("td_spawn_box", { SIZE: num(1), WHERE: shadowPlace }),
             block("td_looking_at_thing"),
             block("td_gravity"),
           ]),

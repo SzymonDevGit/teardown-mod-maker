@@ -99,7 +99,12 @@
   const codeButton = $("btn-code");
 
   function refreshCode() {
-    $("code-output").textContent = window.buildLua(workspace);
+    try {
+      $("code-output").textContent = window.buildLua(workspace);
+    } catch (error) {
+      console.error(error);
+      $("code-output").textContent = T.errors.code_failed;
+    }
   }
 
   let saveTimer = null;
@@ -202,7 +207,15 @@
       return;
     }
     const voxFile = $("mod-vox").files[0];
-    const body = { ...modInfo(), lua: window.buildLua(workspace) };
+    let lua;
+    try {
+      lua = window.buildLua(workspace);
+    } catch (error) {
+      console.error(error);
+      showError("code_failed");
+      return;
+    }
+    const body = { ...modInfo(), lua };
     try {
       if (voxFile) body.vox = await readFileBase64(voxFile);
       const response = await fetch("/api/export", {

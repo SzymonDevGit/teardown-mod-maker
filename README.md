@@ -20,7 +20,7 @@ A website where you snap blocks together to make mods for [Teardown](https://tea
 | If / Then, Repeat, Numbers, Text, Variables | Blockly's standard blocks, including "join text" and "change variable by" |
 | **Advanced: Timers** | after some seconds, every few seconds, time since the level started |
 | **Advanced: Screen** | big text on the screen (top, middle or bottom), clear it, black and white or old-photo colours |
-| **Advanced: Objects** | push or remove what you're looking at, spawn a box, looking at something that moves, gravity |
+| **Advanced: Objects** | push or remove what you're looking at, spawn a box, looking at something that can move, gravity |
 | **Advanced: Effects** | coloured lights, smoke and sparks, rain |
 | **Advanced: My blocks** | make your own block out of other blocks and reuse it |
 

@@ -106,9 +106,13 @@ def block_terms():
     return dict(re.findall(r"(\w+): \"(\w+)\"", body))
 
 
-def test_every_teardown_block_has_hold_t_help():
+def defined_blocks():
     defined = set(re.findall(r'(?:eventBlock|actionBlock|valueBlock)\("(td_\w+)"', BLOCKS_JS))
-    defined |= set(re.findall(r'type: "(td_\w+)",\n', BLOCKS_JS))
+    return defined | set(re.findall(r'type: "(td_\w+)",\n', BLOCKS_JS))
+
+
+def test_every_teardown_block_has_hold_t_help():
+    defined = defined_blocks()
     terms = block_terms()
     assert defined, "no blocks found in blocks.js"
     assert defined - terms.keys() == set()
@@ -133,3 +137,17 @@ def test_block_messages_have_matching_placeholders():
     for key, english in TRANSLATIONS["en"]["blocks"].items():
         polish = TRANSLATIONS["pl"]["blocks"][key]
         assert sorted(re.findall(r"%\d", english)) == sorted(re.findall(r"%\d", polish)), key
+
+
+def test_every_teardown_block_is_in_the_toolbox():
+    toolbox = BLOCKS_JS.split("window.TOOLBOX = {", 1)[1].split("window.BLOCK_TERMS", 1)[0]
+    assert defined_blocks() - set(re.findall(r'block\("(td_\w+)"', toolbox)) == set()
+
+
+def test_my_blocks_cannot_take_teardown_names():
+    # Every game function the mod calls must be reserved, so a kid's block or variable can't replace it.
+    reserved = BLOCKS_JS.split("const TEARDOWN_NAMES = [", 1)[1].split("];", 1)[0]
+    reserved = set(re.findall(r'"(\w+)"', reserved))
+    called = set(re.findall(r"\b([A-Z][A-Za-z]+)\(", BLOCKS_JS)) - {"FN", "Number", "String", "Set"}
+    assert called - reserved == set()
+    assert {"init", "tick", "update", "draw"} <= reserved

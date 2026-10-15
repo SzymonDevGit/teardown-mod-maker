@@ -36,16 +36,21 @@
     a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
   // Put the label below (or beside) the thing it explains, moving it down past
-  // other labels. If there's no free space left, skip it so the screen stays readable.
-  function placeLabel(termKey, rect, beside = false) {
+  // other labels. If there's no free space left, or it would end up next to
+  // something else (more than maxShift pixels away), skip it so the screen stays readable.
+  function placeLabel(termKey, rect, beside = false, maxShift = Infinity, maxRight = Infinity) {
     const label = makeLabel(termKey);
     if (!label) return null;
     layer.appendChild(label);
+    // Make a label beside something narrower rather than let it run into the glossary.
+    const room = maxRight - (rect.right + 6);
+    if (beside && room >= 150 && room < label.offsetWidth) label.style.maxWidth = `${room}px`;
     const width = label.offsetWidth;
     const height = label.offsetHeight;
     const left = Math.min(Math.max(4, beside ? rect.right + 6 : rect.left), window.innerWidth - width - 4);
-    let top = beside ? rect.top : rect.bottom + 4;
-    for (let tries = 0; tries < 8; tries++) {
+    const start = beside ? rect.top : rect.bottom + 4;
+    let top = start;
+    for (let tries = 0; tries < 8 && top - start <= maxShift; tries++) {
       const box = { left, right: left + width, top, bottom: top + height };
       const hit = placed.find((other) => overlaps(box, other));
       if (!hit) {
@@ -120,20 +125,23 @@
     const g = glossary.getBoundingClientRect();
     placed = [{ left: g.left, right: g.right, top: g.top, bottom: g.bottom }];
 
+    const workspace = window.workspace;
+    const seen = new Set();
+    const open = workspace && openFlyout(workspace);
+    if (open) {
+      // A block menu is open: explain its blocks first, in a column beside it.
+      // A label that can't stay level with its own block is left out, so none sits next to the wrong block.
+      for (const [term, rect] of blockRects(open.flyout.getWorkspace(), seen)) {
+        placeLabel(term, { ...rect, right: open.rect.right }, true, (rect.bottom - rect.top) * 0.6, g.left - 6);
+      }
+    }
     document.querySelectorAll("[data-term]").forEach((el) => {
       if (el.id === "workspace") return;
       const rect = el.getBoundingClientRect();
       if (isVisible(rect)) placeLabel(el.dataset.term, rect);
     });
-    const workspace = window.workspace;
     if (!workspace) return;
-    const seen = new Set();
-    const open = openFlyout(workspace);
     if (open) {
-      // A block menu is open: explain its blocks in a column beside it.
-      for (const [term, rect] of blockRects(open.flyout.getWorkspace(), seen)) {
-        placeLabel(term, { ...rect, right: open.rect.right }, true);
-      }
       for (const [term, rect] of blockRects(workspace, seen, open.rect)) placeLabel(term, rect);
       return;
     }

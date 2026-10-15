@@ -31,7 +31,8 @@
       "too_big": "Your mod is too big. Try removing some blocks.",
       "vox_too_big": "That .vox file is too big (2 MB max).",
       "not_vox": "That doesn't look like a .vox file.",
-      "network": "Couldn't reach the app. Is it still running?"
+      "network": "Couldn't reach the app. Is it still running?",
+      "code_failed": "Some blocks couldn't be turned into code. Try removing the last block you added."
     }
   },
   "categories": {
@@ -80,7 +81,7 @@
     "message_default": "Hello!",
     "unused_comment": "Blocks not inside an event block don't run.",
     "key_shift": "Shift",
-    "every_seconds": "every %1 seconds",
+    "every_seconds": "every %1 sec",
     "shoot_shotgun": "shotgun blast",
     "paint": "paint %1 at %2 size %3",
     "paint_spray": "yellow spray",
@@ -106,7 +107,7 @@
     "on_ground": "I'm on the ground",
     "above": "%1 metres above %2",
     "random_near": "random spot within %1 metres of %2",
-    "after": "after %1 seconds",
+    "after": "after %1 sec",
     "time": "seconds since the level started",
     "screen_text": "show %1 on the screen at the %2",
     "screen_text_default": "You win!",
@@ -120,7 +121,7 @@
     "filter_old": "old photo",
     "push_thing": "push what I'm looking at with power %1",
     "delete_thing": "make what I'm looking at disappear",
-    "spawn_box": "spawn a %1 box %2 metres big at %3",
+    "spawn_box": "spawn a %1 box of size %2 m at %3",
     "mat_wood": "wood",
     "mat_metal": "metal",
     "mat_glass": "glass",
@@ -146,7 +147,8 @@
     "particles_sparks": "sparks",
     "rain": "turn rain %1",
     "rain_on": "on",
-    "rain_off": "off"
+    "rain_off": "off",
+    "my_block": "my block"
   },
   "terms": {
     "mod": { "name": "Mod", "desc": "A change or add-on for a game. Your mod adds new things to Teardown." },
@@ -170,7 +172,7 @@
     "explode": { "name": "Explosion", "desc": "Blows things up. Size goes from 0.5 (small pop) to 4 (huge boom)." },
     "hole": { "name": "Make a hole", "desc": "Removes blocks in a ball shape without a bang." },
     "fire": { "name": "Fire", "desc": "Sets the spot on fire. Wood burns, metal doesn't." },
-    "shoot": { "name": "Shoot", "desc": "Fires a bullet or rocket from where you're looking." },
+    "shoot": { "name": "Shoot", "desc": "Fires a bullet, a rocket or a shotgun blast from where you're looking." },
     "message": { "name": "Show message", "desc": "Writes text on the screen. Great for testing if your blocks run." },
     "set_health": { "name": "Health", "desc": "How alive you are. 100% is full, 0% means game over." },
     "health": { "name": "My health", "desc": "Your health right now, from 0 to 100." },
@@ -219,18 +221,18 @@
     "objects": { "name": "Objects", "desc": "Blocks that move, make or remove things in the world." },
     "push_thing": { "name": "Push it", "desc": "Shoves the object you're looking at. Walls and floors don't move." },
     "delete_thing": { "name": "Make it disappear", "desc": "Removes the object you're looking at. Only works on things that can move." },
-    "spawn_box": { "name": "Spawn a box", "desc": "Makes a new box that falls and breaks like real objects." },
+    "spawn_box": { "name": "Spawn a box", "desc": "Makes a new box that falls and breaks like real objects. Size goes from 0.1 to 5 metres." },
     "looking_at_thing": { "name": "Looking at something", "desc": "True when the middle of your screen points at an object that can move." },
     "gravity": { "name": "Gravity", "desc": "What pulls everything down. Change it to float like on the moon!" },
     "effects": { "name": "Effects", "desc": "Lights, smoke, sparks and weather." },
-    "light": { "name": "Light", "desc": "Adds a glowing light that stays until you turn your lights off." },
+    "light": { "name": "Light", "desc": "Adds a glowing light that stays until you turn your lights off. Up to 50 at once: a new one replaces the oldest." },
     "lights_off": { "name": "Lights off", "desc": "Turns off every light your mod added." },
     "particles": { "name": "Smoke and sparks", "desc": "A puff of smoke or a burst of sparks." },
     "rain": { "name": "Rain", "desc": "Makes it rain, or stops the rain." },
     "my_blocks": { "name": "My blocks", "desc": "Make your own block from other blocks, then use it again and again." },
     "function_def": { "name": "My block", "desc": "Your own block. Put blocks inside, then use it from the My blocks group." },
     "function_call": { "name": "Use my block", "desc": "Runs the blocks inside your own block." },
-    "function_return": { "name": "Give back", "desc": "Stops your block early and gives back a value." },
+    "function_return": { "name": "Return", "desc": "Stops your block early and gives back a value." },
     "not": { "name": "Not", "desc": "Flips true to false, and false to true." },
     "join": { "name": "Join text", "desc": "Sticks text together, like 'Score: ' and a number." },
     "variable_change": { "name": "Change variable", "desc": "Adds a number to a variable, like adding 1 to a score." }
