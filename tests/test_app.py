@@ -158,3 +158,14 @@ def test_my_blocks_cannot_take_teardown_names():
     called = set(re.findall(r"\b([A-Z][A-Za-z]+)\(", BLOCKS_JS)) - {"FN", "Number", "String", "Set", "Map", "Boolean"}
     assert called - reserved == set()
     assert {"init", "tick", "update", "draw"} <= reserved
+
+
+def test_default_vox_is_solid_and_held_low():
+    vox = build_default_vox()
+    start = vox.index(b"XYZI") + 12
+    count = struct.unpack_from("<i", vox, start)[0]
+    colours = {vox[start + 4 + i * 4 + 3] for i in range(count)}
+    # Palette indices 1-8 are glass in Teardown, which makes the tool see-through.
+    assert colours and min(colours) > 8
+    # Moved down and forward like Teardown's example laser gun, so it isn't held at eye level.
+    assert b"_t" in vox and b"0 9 -11" in vox
