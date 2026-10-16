@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app.title }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Barlow+Condensed:wght@500;600;700&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="logo" aria-hidden="true">💥</span>
+      <span class="logo" aria-hidden="true">{% for i in range(16) %}<i></i>{% endfor %}</span>
       <div>
         <h1>{{ t.app.title }}</h1>
         <p class="tagline">{{ t.app.tagline }}</p>
@@ -23,15 +23,14 @@
       <button id="btn-save" class="btn" data-term="save">{{ t.app.save }}</button>
       <button id="btn-code" class="btn" data-term="show_code">{{ t.app.show_code }}</button>
       <button id="btn-download" class="btn btn-primary" data-term="download">{{ t.app.download }}</button>
-      <label class="lang" data-term="language">
-        <span class="visually-hidden">{{ t.app.language }}</span>
-        <select id="lang-select">
-          {% for code in languages %}
-          <option value="{{ code }}" {% if code == lang %}selected{% endif %}>{{ {"en": "English", "pl": "Polski"}[code] }}</option>
-          {% endfor %}
-        </select>
-      </label>
+      <div class="lang" id="lang-switch" role="group" aria-label="{{ t.app.language }}" data-term="language">
+        {% for code in languages %}
+        <button type="button" class="lang-option" data-lang="{{ code }}" lang="{{ code }}"
+          title="{{ {"en": "English", "pl": "Polski"}[code] }}" aria-pressed="{{ 'true' if code == lang else 'false' }}">{{ code|upper }}</button>
+        {% endfor %}
+      </div>
     </nav>
+    <div class="hazard" aria-hidden="true"></div>
   </header>
 
   <main class="main">

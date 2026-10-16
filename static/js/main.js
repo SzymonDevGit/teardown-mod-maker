@@ -4,33 +4,68 @@
   const STORAGE_KEY = "tmm.project";
   const $ = (id) => document.getElementById(id);
 
+  const BLOCK_FONT = "'Barlow Condensed', 'Arial Narrow', sans-serif";
+  const BLOCK_FONT_SAMPLE = "600 16px 'Barlow Condensed'";
+  const fontReady = !document.fonts || document.fonts.check(BLOCK_FONT_SAMPLE);
+
   const workspace = Blockly.inject("workspace", {
     toolbox: window.TOOLBOX,
     media: window.APP.blocklyMedia,
     trashcan: true,
     zoom: { controls: true, wheel: true, startScale: 1.1 },
     move: { scrollbars: true, drag: true, wheel: false },
-    grid: { spacing: 24, length: 2, colour: "#2c303a", snap: true },
-    theme: Blockly.Theme.defineTheme("tmm-dark", {
+    grid: { spacing: 24, length: 24, colour: "#262019", snap: true },
+    theme: Blockly.Theme.defineTheme("tmm-scrapyard", {
       base: Blockly.Themes.Classic,
-      componentStyles: {
-        workspaceBackgroundColour: "#1b1e24",
-        toolboxBackgroundColour: "#20232b",
-        toolboxForegroundColour: "#f2f3f5",
-        flyoutBackgroundColour: "#2a2e38",
-        flyoutForegroundColour: "#d0d4dc",
-        flyoutOpacity: 1,
-        scrollbarColour: "#797979",
-        scrollbarOpacity: 0.5,
-        insertionMarkerColour: "#ffffff",
-        insertionMarkerOpacity: 0.3,
-        cursorColour: "#d0d0d0",
+      blockStyles: {
+        logic_blocks: { colourPrimary: "#5b6470" },
+        loop_blocks: { colourPrimary: "#4c7a3a" },
+        math_blocks: { colourPrimary: "#4b4f8a" },
+        text_blocks: { colourPrimary: "#2d7f7a" },
+        variable_blocks: { colourPrimary: "#8a3e6e" },
+        procedure_blocks: { colourPrimary: "#7a4a8a" },
       },
-      fontStyle: { family: "Nunito, system-ui, sans-serif", weight: "700", size: 12 },
+      categoryStyles: {
+        logic_category: { colour: "#5b6470" },
+        loop_category: { colour: "#4c7a3a" },
+        math_category: { colour: "#4b4f8a" },
+        text_category: { colour: "#2d7f7a" },
+        variable_category: { colour: "#8a3e6e" },
+        procedure_category: { colour: "#7a4a8a" },
+      },
+      componentStyles: {
+        workspaceBackgroundColour: "#16130f",
+        toolboxBackgroundColour: "#0f0d0b",
+        toolboxForegroundColour: "#eeeeee",
+        flyoutBackgroundColour: "#1f1a14",
+        flyoutForegroundColour: "#ddd5c8",
+        flyoutOpacity: 1,
+        scrollbarColour: "#6b5c48",
+        scrollbarOpacity: 0.6,
+        insertionMarkerColour: "#f5b400",
+        insertionMarkerOpacity: 0.4,
+        cursorColour: "#f5b400",
+      },
+      fontStyle: { family: BLOCK_FONT, weight: "600", size: 13 },
     }),
     renderer: "zelos",
   });
   window.workspace = workspace;
+
+  // Blockly sizes blocks from the font it has when they are drawn. If the web font
+  // arrives later, reload the blocks so their text fits.
+  if (!fontReady) {
+    document.fonts.load(BLOCK_FONT_SAMPLE).then(() => {
+      if (!document.fonts.check(BLOCK_FONT_SAMPLE)) return;
+      const state = Blockly.serialization.workspaces.save(workspace);
+      Blockly.Events.disable();
+      try {
+        Blockly.serialization.workspaces.load(state, workspace);
+      } finally {
+        Blockly.Events.enable();
+      }
+    }).catch(() => {});
+  }
 
   // ---- Saving: blocks and mod details live in the browser, and in files ----
 
@@ -178,9 +213,12 @@
 
   // ---- Language ----
 
-  $("lang-select").addEventListener("change", (event) => {
-    writeStorage(currentProject());
-    window.location.href = `/lang/${event.target.value}`;
+  document.querySelectorAll("#lang-switch [data-lang]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.dataset.lang === window.APP.lang) return;
+      writeStorage(currentProject());
+      window.location.href = `/lang/${button.dataset.lang}`;
+    });
   });
 
   // ---- Download mod ----
