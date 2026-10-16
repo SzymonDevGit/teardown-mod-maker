@@ -177,7 +177,7 @@
   let needs = new Set();
 
   // Global names the helpers use, so a kid's variable can't clash with them.
-  L.addReservedWords("td_slowmo,td_timers,td_screen,td_lights,td_sounds,td_every,td_depth,td_aim,td_frame,td_started,td_colours,dt");
+  L.addReservedWords("td_slowmo,td_timers,td_screen,td_messages,td_tools,td_lights,td_sounds,td_every,td_depth,td_aim,td_frame,td_started,td_colours,dt");
 
   // "My blocks" become Lua functions named by the kid. Make sure no name takes over a Teardown callback
   // (a My block called "update" would run by itself every frame) or a game function the mod calls
@@ -412,7 +412,16 @@ end`);
   };
   L.forBlock.td_shake = (b) => `ShakeCamera(${Number(b.getFieldValue("STRENGTH")) || 0.5})\n`;
   L.forBlock.td_sound = (b) => `${playSoundFn()}(${luaString(b.getFieldValue("SOUND"))})\n`;
-  L.forBlock.td_message = (b) => `DebugPrint(tostring(${val(b, "TEXT", '""')}))\n`;
+  // Messages are drawn by the mod (not DebugPrint), so they can fade and hide while the mod's tool isn't held.
+  const sayFn = () => helper("td_say", `
+function FN(text)
+  table.insert(td_messages, { text = tostring(text), time = GetTime() })
+  if #td_messages > 5 then table.remove(td_messages, 1) end
+end`);
+  L.forBlock.td_message = (b) => {
+    needs.add("messages");
+    return `${sayFn()}(${val(b, "TEXT", '""')})\n`;
+  };
 
   // Player (health in Teardown goes from 0 to 1; the blocks use 0 to 100 so it reads like a percent)
   L.forBlock.td_launch = (b) =>
@@ -448,10 +457,18 @@ end`);
   L.forBlock.td_time = () => ["(math.floor(GetTime() * 10 + 0.5) / 10)", O.ATOMIC];
 
   // Screen
+  // Remembers when the words last changed, so mods without a tool can fade them out a few seconds later.
+  const showFn = () => helper("td_show", `
+function FN(spot, text)
+  text = tostring(text)
+  if td_screen[spot] == nil or td_screen[spot].text ~= text then
+    td_screen[spot] = { text = text, time = GetTime() }
+  end
+end`);
   L.forBlock.td_screen_text = (b) => {
     needs.add("screen");
     const spot = ["top", "middle", "bottom"].includes(b.getFieldValue("SPOT")) ? b.getFieldValue("SPOT") : "middle";
-    return `td_screen.${spot} = tostring(${val(b, "TEXT", '""')})\n`;
+    return `${showFn()}("${spot}", ${val(b, "TEXT", '""')})\n`;
   };
   L.forBlock.td_clear_screen = () => {
     needs.add("screen");
@@ -746,6 +763,9 @@ end`);
     if (needs.has("sounds")) state.push("td_sounds = {}");
     if (needs.has("calls")) state.push("td_depth = 0");
     if (needs.has("screen")) state.push("td_screen = {}");
+    if (needs.has("messages")) state.push("td_messages = {}");
+    const showsText = needs.has("screen") || needs.has("messages");
+    if (showsText && toolIds.size) state.push(`td_tools = { ${[...toolIds].map((id) => `["${id}"] = true`).join(", ")} }`);
     if (everyCount) state.unshift("td_every = {}");
 
     const helpers = L.finish("").trim();
@@ -755,22 +775,53 @@ end`);
     if (helpers) parts.push(helpers);
     parts.push(`function init()\n${init.join("")}end`);
     parts.push(`function tick(dt)\n${everyFrame.join("")}${tick.join("")}${afterEvents.join("")}end`);
-    if (needs.has("screen")) {
-      parts.push(
-        "function draw()\n" +
-        "  local rows = { top = 0.15, middle = 0.5, bottom = 0.85 }\n" +
-        "  for spot, text in pairs(td_screen) do\n" +
-        "    UiPush()\n" +
-        "    UiTranslate(UiCenter(), UiHeight() * (rows[spot] or 0.5))\n" +
-        '    UiAlign("center middle")\n' +
-        '    UiFont("bold.ttf", 48)\n' +
-        "    UiTextOutline(0, 0, 0, 1, 0.1)\n" +
-        "    UiColor(1, 1, 1)\n" +
-        "    UiText(text)\n" +
-        "    UiPop()\n" +
-        "  end\n" +
-        "end"
-      );
+    if (showsText) {
+      // A mod with a tool only shows its words while you hold one of its tools, so many mods at once
+      // don't cover the screen. A mod without a tool fades its words out 4 seconds after they last changed.
+      const draw = ["function draw()\n"];
+      if (toolIds.size) {
+        draw.push('  if GetPlayerVehicle() ~= 0 or not td_tools[GetString("game.player.tool")] then return end\n');
+      }
+      draw.push("  local now = GetTime()\n");
+      if (needs.has("screen")) {
+        draw.push(
+          "  local rows = { top = 0.15, middle = 0.5, bottom = 0.85 }\n" +
+          "  for spot, line in pairs(td_screen) do\n" +
+          (toolIds.size ? "    local fade = 1\n" : "    local fade = math.min(1, 5 - (now - line.time))\n") +
+          "    if fade > 0 then\n" +
+          "      UiPush()\n" +
+          "      UiTranslate(UiCenter(), UiHeight() * (rows[spot] or 0.5))\n" +
+          '      UiAlign("center middle")\n' +
+          '      UiFont("bold.ttf", 48)\n' +
+          "      UiTextOutline(0, 0, 0, fade, 0.1)\n" +
+          "      UiColor(1, 1, 1, fade)\n" +
+          "      UiText(line.text)\n" +
+          "      UiPop()\n" +
+          "    end\n" +
+          "  end\n"
+        );
+      }
+      if (needs.has("messages")) {
+        // Messages sit low on the left, newest at the bottom, and each one fades after 4 seconds.
+        draw.push(
+          "  UiPush()\n" +
+          "  UiTranslate(40, UiHeight() - 160)\n" +
+          '  UiAlign("left bottom")\n' +
+          '  UiFont("bold.ttf", 24)\n' +
+          "  for i = #td_messages, 1, -1 do\n" +
+          "    local fade = math.min(1, 5 - (now - td_messages[i].time))\n" +
+          "    if fade > 0 then\n" +
+          "      UiTextOutline(0, 0, 0, fade, 0.1)\n" +
+          "      UiColor(1, 1, 1, fade)\n" +
+          "      UiText(td_messages[i].text)\n" +
+          "      UiTranslate(0, -30)\n" +
+          "    end\n" +
+          "  end\n" +
+          "  UiPop()\n"
+        );
+      }
+      draw.push("end");
+      parts.push(draw.join(""));
     }
     return parts.join("\n\n") + "\n";
   };
