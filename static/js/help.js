@@ -7,6 +7,11 @@
   const layer = document.getElementById("help-layer");
   const glossary = document.getElementById("help-glossary");
   let showing = false;
+  const pointer = { x: -1, y: -1 };
+  document.addEventListener("pointermove", (event) => {
+    pointer.x = event.clientX;
+    pointer.y = event.clientY;
+  });
 
   function makeLabel(termKey) {
     const term = TERMS[termKey];
@@ -31,16 +36,21 @@
     a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
   // Put the label below (or beside) the thing it explains, moving it down past
-  // other labels. If there's no free space left, skip it so the screen stays readable.
-  function placeLabel(termKey, rect, beside = false) {
+  // other labels. If there's no free space left, or it would end up next to
+  // something else (more than maxShift pixels away), skip it so the screen stays readable.
+  function placeLabel(termKey, rect, beside = false, maxShift = Infinity, maxRight = Infinity) {
     const label = makeLabel(termKey);
     if (!label) return null;
     layer.appendChild(label);
+    // Make a label beside something narrower rather than let it run into the glossary.
+    const room = maxRight - (rect.right + 6);
+    if (beside && room >= 150 && room < label.offsetWidth) label.style.maxWidth = `${room}px`;
     const width = label.offsetWidth;
     const height = label.offsetHeight;
     const left = Math.min(Math.max(4, beside ? rect.right + 6 : rect.left), window.innerWidth - width - 4);
-    let top = beside ? rect.top : rect.bottom + 4;
-    for (let tries = 0; tries < 8; tries++) {
+    const start = beside ? rect.top : rect.bottom + 4;
+    let top = start;
+    for (let tries = 0; tries < 8 && top - start <= maxShift; tries++) {
       const box = { left, right: left + width, top, bottom: top + height };
       const hit = placed.find((other) => overlaps(box, other));
       if (!hit) {
@@ -56,37 +66,52 @@
     return null;
   }
 
-  function blockRects(workspace) {
+  // One label per kind of block, for the blocks visible in a workspace.
+  // Blocks hidden behind the open block menu (the flyout) are skipped.
+  function blockRects(ws, seen, hiddenBy) {
     const results = [];
-    const seen = new Set();
-    const add = (ws) => {
-      for (const block of ws.getAllBlocks(false)) {
-        const term = window.BLOCK_TERMS[block.type];
-        const svg = block.getSvgRoot && block.getSvgRoot();
-        if (!term || !svg || block.isShadow() || seen.has(term)) continue;
-        // Measure only the block's own row, not the blocks nested inside it.
-        const path = svg.querySelector(":scope > .blocklyPath") || svg;
-        const rect = path.getBoundingClientRect();
-        if (!isVisible(rect)) continue;
-        seen.add(term);
-        results.push([term, { left: rect.left, top: rect.top, bottom: rect.top + Math.min(rect.height, 48) }]);
-      }
-    };
-    add(workspace);
+    for (const block of ws.getAllBlocks(false)) {
+      const term = window.BLOCK_TERMS[block.type];
+      const svg = block.getSvgRoot && block.getSvgRoot();
+      if (!term || !svg || block.isShadow() || seen.has(term)) continue;
+      // Measure only the block's own row, not the blocks nested inside it.
+      const path = svg.querySelector(":scope > .blocklyPath") || svg;
+      const rect = path.getBoundingClientRect();
+      if (!isVisible(rect)) continue;
+      const box = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.top + Math.min(rect.height, 48) };
+      if (hiddenBy && overlaps(box, hiddenBy)) continue;
+      seen.add(term);
+      results.push([term, box]);
+      if (results.length >= MAX_BLOCK_LABELS) break;
+    }
+    return results;
+  }
+
+  function openFlyout(workspace) {
     const flyout = workspace.getFlyout && workspace.getFlyout();
-    if (flyout && flyout.isVisible()) add(flyout.getWorkspace());
-    return results.slice(0, MAX_BLOCK_LABELS);
+    if (!flyout || !flyout.isVisible()) return null;
+    const svg = flyout.getWorkspace().getParentSvg();
+    const rect = svg && svg.getBoundingClientRect();
+    return rect && isVisible(rect) ? { flyout, rect } : null;
   }
 
   function categoryRects(workspace) {
     const toolbox = workspace.getToolbox && workspace.getToolbox();
     if (!toolbox) return [];
     const results = [];
-    for (const item of toolbox.getToolboxItems()) {
+    // Include the groups inside "Advanced", which Blockly keeps as children.
+    const items = new Set();
+    const collect = (item) => {
+      items.add(item);
+      if (item.getChildToolboxItems) item.getChildToolboxItems().forEach(collect);
+    };
+    toolbox.getToolboxItems().forEach(collect);
+    for (const item of items) {
       const id = item.getId();
-      const div = item.getDiv && item.getDiv();
-      if (!TERMS[id] || !div) continue;
-      const rect = div.getBoundingClientRect();
+      // The row itself, not the whole group with its children.
+      const row = (item.getClickTarget && item.getClickTarget()) || (item.getDiv && item.getDiv());
+      if (!TERMS[id] || !row) continue;
+      const rect = row.getBoundingClientRect();
       if (isVisible(rect)) results.push([id, rect]);
     }
     return results;
@@ -100,16 +125,33 @@
     const g = glossary.getBoundingClientRect();
     placed = [{ left: g.left, right: g.right, top: g.top, bottom: g.bottom }];
 
+    const workspace = window.workspace;
+    const seen = new Set();
+    const open = workspace && openFlyout(workspace);
+    if (open) {
+      // A block menu is open: explain its blocks first, in a column beside it.
+      // A label that can't stay level with its own block is left out, so none sits next to the wrong block.
+      for (const [term, rect] of blockRects(open.flyout.getWorkspace(), seen)) {
+        placeLabel(term, { ...rect, right: open.rect.right }, true, (rect.bottom - rect.top) * 0.6, g.left - 6);
+      }
+    }
     document.querySelectorAll("[data-term]").forEach((el) => {
       if (el.id === "workspace") return;
       const rect = el.getBoundingClientRect();
       if (isVisible(rect)) placeLabel(el.dataset.term, rect);
     });
-    const workspace = window.workspace;
-    if (workspace) {
-      for (const [term, rect] of blockRects(workspace)) placeLabel(term, rect);
-      for (const [term, rect] of categoryRects(workspace)) placeLabel(term, rect, true);
+    if (!workspace) return;
+    if (open) {
+      for (const [term, rect] of blockRects(workspace, seen, open.rect)) placeLabel(term, rect);
+      return;
     }
+    // Explain the group names first when the pointer is over the block menu, otherwise the blocks.
+    const toolbox = workspace.getToolbox && workspace.getToolbox();
+    const menu = toolbox && toolbox.HtmlDiv && toolbox.HtmlDiv.getBoundingClientRect();
+    const overMenu = menu && pointer.x >= menu.left && pointer.x <= menu.right && pointer.y >= menu.top && pointer.y <= menu.bottom;
+    const blocks = () => blockRects(workspace, seen).forEach(([term, rect]) => placeLabel(term, rect));
+    const groups = () => categoryRects(workspace).forEach(([term, rect]) => placeLabel(term, rect, true));
+    if (overMenu) { groups(); blocks(); } else { blocks(); groups(); }
   }
 
   function hide() {

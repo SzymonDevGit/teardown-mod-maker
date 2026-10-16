@@ -9,6 +9,23 @@ A website where you snap blocks together to make mods for [Teardown](https://tea
 - **Download and play.** "Download mod" gives you a zip to drop into Teardown's mods folder.
 - **No accounts.** Your blocks save in your browser automatically. "Save" and "Open" let you keep them in a file.
 
+## The blocks
+
+| Group | Blocks |
+| --- | --- |
+| Events | make a tool, when a key is pressed, when the game starts, every few seconds, every frame |
+| Actions | explode, make a hole, start a fire, shoot, paint, shake the screen, play a sound, show a message |
+| Player | launch, push me, teleport, set or change health, slow motion, my health, my speed, key held down, on the ground |
+| Places | where I'm looking, my position, in front of me, above a place, a random spot near a place |
+| If / Then, Repeat, Numbers, Text, Variables | Blockly's standard blocks, including "join text" and "change variable by" |
+| **Advanced: Timers** | after some seconds, every few seconds, time since the level started |
+| **Advanced: Screen** | big text on the screen (top, middle or bottom), clear it, black and white or old-photo colours |
+| **Advanced: Objects** | push or remove what you're looking at, spawn a box, looking at something that can move, gravity |
+| **Advanced: Effects** | coloured lights, smoke and sparks, rain |
+| **Advanced: My blocks** | make your own block out of other blocks and reuse it |
+
+Mods are classic singleplayer mods (plain `init`, `tick` and `draw` in `main.lua`), which Teardown still supports. They don't work in multiplayer yet.
+
 ## Run it on Windows
 
 You only need to do steps 1 to 3 once.
@@ -70,7 +87,7 @@ Tip: use the **show message** block to check your blocks run. The message appear
 | `static/js/main.js` | Buttons, saving, opening, and downloading. |
 | `translations/en.json`, `pl.json` | All the text in both languages, including the help descriptions. |
 
-**Adding a block:** define it and its Lua in `static/js/blocks.js`, add it to `TOOLBOX` and `BLOCK_TERMS`, then add its words to both translation files.
+**Adding a block:** define it and its Lua in `static/js/blocks.js`, add it to `TOOLBOX` and `BLOCK_TERMS`, then add its words and its hold-T help to both translation files. The tests fail if any of those are missing.
 
 ## Tests
 
@@ -79,4 +96,4 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-The tests check the mod zip, the language switch, and that the Polish file has every English text.
+The tests check the mod zip, the language switch, that the Polish file has every English text, and that every block has its words and hold-T help in both languages.

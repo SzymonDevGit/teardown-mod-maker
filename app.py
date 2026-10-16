@@ -70,6 +70,7 @@ def export_mod():
             description=data.get("description", ""),
             lua=data.get("lua", ""),
             vox=vox,
+            has_tool=data.get("tool", True) is not False,
         )
     except ModError as err:
         return jsonify(error=str(err)), 400
