@@ -79,6 +79,7 @@
     "launch": "wyrzuć mnie w górę z siłą %1",
     "teleport": "teleportuj mnie %1",
     "slowmo": "zwolnione tempo przez %1 s",
+    "regen": "zdrowie odnawia się samo: %1",
     "look_point": "tam, gdzie patrzę",
     "my_pos": "tam, gdzie stoję",
     "in_front": "%1 m przede mną",
@@ -152,6 +153,8 @@
     "rain": "%1 deszcz",
     "rain_on": "włącz",
     "rain_off": "wyłącz",
+    "regen_on": "tak",
+    "regen_off": "nie",
     "my_block": "mój klocek"
   },
   "terms": {
@@ -183,6 +186,7 @@
     "launch": { "name": "Wyrzut", "desc": "Wyrzuca cię w powietrze. Większa siła to wyżej." },
     "teleport": { "name": "Teleport", "desc": "Przenosi cię natychmiast w inne miejsce." },
     "slowmo": { "name": "Zwolnione tempo", "desc": "Spowalnia całą grę na kilka sekund." },
+    "regen": { "name": "Samo leczenie", "desc": "Teardown powoli odnawia ci zdrowie. Wyłącz to na początku gry, żeby obrażenia z twojego moda zostały." },
     "look_point": { "name": "Tam, gdzie patrzę", "desc": "Punkt na środku ekranu, do 100 metrów dalej." },
     "my_pos": { "name": "Tam, gdzie stoję", "desc": "Miejsce, w którym stoisz." },
     "in_front": { "name": "Przede mną", "desc": "Punkt kilka metrów przed tobą. Zatrzymuje się tuż przed ścianą albo podłogą." },

@@ -79,6 +79,7 @@
     "launch": "launch me up with power %1",
     "teleport": "teleport me to %1",
     "slowmo": "slow motion for %1 seconds",
+    "regen": "health heals by itself: %1",
     "look_point": "where I'm looking",
     "my_pos": "my position",
     "in_front": "%1 metres in front of me",
@@ -152,6 +153,8 @@
     "rain": "turn rain %1",
     "rain_on": "on",
     "rain_off": "off",
+    "regen_on": "on",
+    "regen_off": "off",
     "my_block": "my block"
   },
   "terms": {
@@ -183,6 +186,7 @@
     "launch": { "name": "Launch", "desc": "Throws you up into the air. Bigger power means higher." },
     "teleport": { "name": "Teleport", "desc": "Moves you to a place instantly." },
     "slowmo": { "name": "Slow motion", "desc": "Makes the whole game slow down for a few seconds." },
+    "regen": { "name": "Healing by itself", "desc": "Teardown slowly fills your health back up. Turn it off when the game starts, so damage from your mod stays." },
     "look_point": { "name": "Where I'm looking", "desc": "The spot in the middle of your screen, up to 100 metres away." },
     "my_pos": { "name": "My position", "desc": "The spot where you are standing." },
     "in_front": { "name": "In front of me", "desc": "A spot some metres in front of you. It stops just before a wall or the floor." },

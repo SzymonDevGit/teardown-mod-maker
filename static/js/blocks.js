@@ -111,6 +111,7 @@
     actionBlock("td_set_health", COLOURS.player, B.set_health, [number("VALUE")]),
     actionBlock("td_change_health", COLOURS.player, B.change_health, [number("VALUE")]),
     actionBlock("td_slowmo", COLOURS.player, B.slowmo, [number("SECONDS")]),
+    actionBlock("td_regen", COLOURS.player, B.regen, [dropdown("ON", [[B.regen_off, "off"], [B.regen_on, "on"]])]),
     valueBlock("td_health", COLOURS.player, B.health, "Number"),
     valueBlock("td_speed", COLOURS.player, B.speed, "Number"),
     valueBlock("td_key_held", COLOURS.player, B.key_held, "Boolean", [dropdown("KEY", KEYS)]),
@@ -190,7 +191,7 @@
     "ParticleColor", "ParticleEmissive", "ParticleGravity", "ParticleRadius", "ParticleReset", "ParticleType",
     "PlaySound", "PointLight", "QueryRaycast", "QueryRejectVehicle", "RegisterTool", "SetBool",
     "SetEnvironmentProperty", "SetGravity", "SetPlayerHealth", "SetPlayerTransform", "SetPlayerVelocity",
-    "SetPostProcessingProperty", "SetTimeScale", "ShakeCamera", "Shoot", "Spawn", "SpawnFire", "SpawnParticle",
+    "SetPlayerRegenerationState", "SetPostProcessingProperty", "SetTimeScale", "ShakeCamera", "Shoot", "Spawn", "SpawnFire", "SpawnParticle",
     "Transform", "TransformToParentVec", "UiAlign", "UiCenter", "UiColor", "UiFont", "UiHeight", "UiPop",
     "UiPush", "UiText", "UiTextOutline", "UiTranslate", "Vec", "VecAdd", "VecLength", "VecScale",
   ];
@@ -427,6 +428,8 @@ end`);
     needs.add("slowmo");
     return `td_slowmo = GetTime() + ${numberIn(b, "SECONDS", "3", O.ADDITIVE)}\n`;
   };
+  // Teardown slowly heals the player by itself. Turning that off keeps damage from lava or "change my health" blocks.
+  L.forBlock.td_regen = (b) => `SetPlayerRegenerationState(${b.getFieldValue("ON") === "on" ? "true" : "false"})\n`;
   // Rounded to a whole number, so "my health = 100" works and messages don't show long decimals.
   L.forBlock.td_health = () => ["math.floor(GetPlayerHealth() * 100 + 0.5)", O.HIGH];
   L.forBlock.td_speed = () => ["(math.floor(VecLength(GetPlayerVelocity()) * 10 + 0.5) / 10)", O.ATOMIC];
@@ -822,6 +825,7 @@ end`);
         block("td_set_health", { VALUE: num(100) }),
         block("td_change_health", { VALUE: num(-10) }),
         block("td_slowmo", { SECONDS: num(3) }),
+        block("td_regen"),
         block("td_health"),
         block("td_speed"),
         block("td_key_held"),
@@ -896,7 +900,7 @@ end`);
     td_explode: "explode", td_hole: "hole", td_fire: "fire", td_shoot: "shoot", td_message: "message",
     td_paint: "paint", td_shake: "shake", td_sound: "sound",
     td_set_health: "set_health", td_change_health: "change_health", td_health: "health", td_launch: "launch",
-    td_push_me: "push_me", td_teleport: "teleport", td_slowmo: "slowmo", td_speed: "speed",
+    td_push_me: "push_me", td_teleport: "teleport", td_slowmo: "slowmo", td_regen: "regen", td_speed: "speed",
     td_key_held: "key_held", td_on_ground: "on_ground",
     td_look_point: "look_point", td_my_pos: "my_pos", td_in_front: "in_front", td_above: "above",
     td_random_near: "random_near",
