@@ -14,9 +14,9 @@ LANGUAGES = ("en", "pl")
 DEFAULT_LANGUAGE = "en"
 BLOCKLY_VERSION = "12.3.1"
 
-# The YouTube video the tutorial popup plays (the part after "watch?v=" in its link).
+# The YouTube video the tutorial popup plays: https://youtu.be/EEuTusiPb7M
 # While it's empty, the popup and the Tutorial button stay hidden.
-TUTORIAL_VIDEO_ID = ""
+TUTORIAL_VIDEO_ID = "EEuTusiPb7M"
 
 # Shown in the bottom bar under "Look at my other work!".
 OTHER_WORK = (
