@@ -15,14 +15,14 @@
   Blockly.Msg.PROCEDURES_DEFRETURN_COMMENT = "";
 
   const COLOURS = {
-    events: "#e6a01e",
-    actions: "#d9534f",
-    player: "#4a90d9",
-    places: "#3fae7a",
-    timers: "#c27ba0",
-    screen: "#8e7cc3",
-    objects: "#a0522d",
-    effects: "#2aa198",
+    events: "#c98a00",
+    actions: "#b8352b",
+    player: "#2f6fb5",
+    places: "#2f7d4f",
+    timers: "#e06a10",
+    screen: "#6b4fa0",
+    objects: "#8a5a2b",
+    effects: "#1f8a8a",
   };
 
   // No number keys: Teardown uses them to switch tools, so the kid's tool would be put away.
@@ -913,7 +913,7 @@ end`);
       { kind: "category", name: C.variables, categorystyle: "variable_category", custom: "VARIABLE", toolboxitemid: "variables" },
       { kind: "sep" },
       {
-        kind: "category", name: C.advanced, colour: "#666a75", toolboxitemid: "advanced",
+        kind: "category", name: C.advanced, colour: "#6b5c48", toolboxitemid: "advanced",
         contents: [
           category("timers", COLOURS.timers, [
             block("td_after", { SECONDS: num(2) }),

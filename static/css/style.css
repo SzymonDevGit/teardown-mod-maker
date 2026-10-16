@@ -1,15 +1,21 @@
+/* "Scrapyard" look: dark concrete, hazard yellow and chunky voxel shapes, like Teardown. */
 :root {
-  --bg: #16181d;
-  --panel: #20232b;
-  --panel-2: #2a2e38;
-  --text: #f2f3f5;
-  --muted: #a7adba;
-  --accent: #ff8a1f;
-  --accent-text: #1a1206;
-  --border: #363b47;
-  --danger: #ff6b6b;
-  --help: #ffd84d;
-  --help-text: #1d1a08;
+  --bg: #16130f;
+  --panel: #0d0b09;
+  --panel-2: #2a241d;
+  --edge: #3d342a;
+  --text: #eeeeee;
+  --muted: #9a8f80;
+  --dim: #7d7264;
+  --yellow: #f5b400;
+  --yellow-light: #ffd24d;
+  --yellow-dark: #b77f00;
+  --orange: #e06a10;
+  --ink: #111111;
+  --danger: #ff6b5b;
+  --heading: "Russo One", "Arial Black", sans-serif;
+  --body: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -24,167 +30,300 @@ body {
   flex-direction: column;
   background: var(--bg);
   color: var(--text);
-  font-family: "Nunito", system-ui, sans-serif;
-  font-size: 16px;
+  font-family: var(--body);
+  font-size: 17px;
 }
 
+/* ---- Top bar ---- */
+
 .topbar {
+  position: relative;
+  z-index: 80; /* above Blockly's block list (70) so the hazard stripe shows */
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 16px;
+  padding: 12px 20px;
   background: var(--panel);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 3px solid #000;
+}
+.hazard {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -11px;
+  height: 8px;
+  background: repeating-linear-gradient(-45deg, var(--yellow) 0 14px, var(--ink) 14px 28px);
+  pointer-events: none;
 }
 
-.brand { display: flex; align-items: center; gap: 10px; }
-.logo { font-size: 32px; }
-h1 { margin: 0; font-size: 22px; font-weight: 800; }
-.tagline { margin: 0; color: var(--muted); font-size: 14px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.logo {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+.logo i { background: var(--yellow); }
+.logo i:nth-child(3n) { background: var(--orange); }
+.logo i:nth-child(5), .logo i:nth-child(12), .logo i:nth-child(16) { background: transparent; }
+
+h1 {
+  margin: 0;
+  font-family: var(--heading);
+  font-weight: 400;
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.tagline {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
 .btn {
-  font: inherit;
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border: 2px solid var(--edge);
+  border-radius: 0;
+  background: var(--panel-2);
+  color: #dddddd;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--yellow); color: #fff; }
+.btn:active { box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.4); }
+.btn:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+.btn-primary {
+  background: var(--yellow);
+  border-color: var(--yellow-light);
+  color: var(--ink);
+  box-shadow: inset 0 -5px 0 var(--yellow-dark), 0 0 22px rgba(245, 180, 0, 0.3);
+}
+.btn-primary:hover { background: var(--yellow-light); color: var(--ink); }
+
+.lang { display: flex; border: 2px solid var(--edge); }
+.lang-option {
+  font-family: var(--body);
   font-weight: 700;
   font-size: 17px;
-  padding: 10px 16px;
-  border-radius: 12px;
-  border: 2px solid var(--border);
-  background: var(--panel-2);
+  letter-spacing: 1px;
+  padding: 7px 11px;
+  border: 0;
+  background: transparent;
   color: var(--text);
   cursor: pointer;
 }
-.btn:hover { border-color: var(--accent); }
-.btn:focus-visible { outline: 3px solid var(--help); outline-offset: 2px; }
-.btn-primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.lang-option:hover { background: var(--panel-2); }
+.lang-option[aria-pressed="true"] { background: var(--orange); color: var(--ink); cursor: default; }
+.lang-option:focus-visible { outline: 3px solid var(--yellow); outline-offset: -3px; }
 
-.lang select {
-  font: inherit;
-  font-weight: 700;
-  padding: 9px 10px;
-  border-radius: 12px;
-  border: 2px solid var(--border);
-  background: var(--panel-2);
-  color: var(--text);
-}
+/* ---- Editor ---- */
 
 .main { flex: 1; display: flex; min-height: 0; }
 .workspace { flex: 1; min-width: 0; position: relative; }
 
+/* Blockly's block list on the left */
+.blocklyToolbox {
+  padding: 18px 10px 10px !important;
+  border-right: 3px solid #000;
+}
+.blocklyToolboxCategoryContainer { margin-bottom: 6px; }
+.blocklyToolboxCategory {
+  height: auto !important;
+  margin: 0 !important;
+  padding: 6px 12px 6px 6px !important;
+  background: #1b1712;
+  border-left-width: 6px !important;
+  border-left-style: solid !important;
+}
+.blocklyToolboxCategory:not(.blocklyToolboxSelected):hover { background: #2b241b; }
+.blocklyToolboxSelected {
+  background: #2b241b !important;
+  outline: 2px solid var(--yellow);
+  outline-offset: -2px;
+}
+.blocklyToolboxCategoryLabel {
+  font-family: var(--body) !important;
+  font-weight: 600;
+  font-size: 19px !important;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.blocklyToolboxCategoryGroup .blocklyToolboxCategoryGroup { padding-left: 12px; margin-top: 6px; }
+.blocklyTreeSeparator { border-bottom: 2px solid #2b241b !important; margin: 10px 4px !important; }
+.blocklyFlyoutBackground { fill-opacity: 0.97; }
+
+/* ---- Show code ---- */
+
 .code-panel {
-  width: min(420px, 45vw);
-  padding: 12px 16px;
+  width: min(440px, 45vw);
+  padding: 14px 18px;
   background: var(--panel);
-  border-left: 1px solid var(--border);
+  border-left: 3px solid #000;
   overflow: auto;
 }
-.code-panel h2 { margin: 0 0 4px; font-size: 18px; }
+.code-panel h2 {
+  margin: 0 0 4px;
+  font-family: var(--heading);
+  font-weight: 400;
+  font-size: 17px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--yellow);
+}
 .code-panel pre {
-  background: #0f1115;
-  border-radius: 10px;
+  background: #000;
+  border: 2px solid #2b241b;
   padding: 12px;
+  font-family: var(--mono);
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.5;
+  color: #e8dcc6;
   white-space: pre;
   overflow: auto;
 }
-.muted { color: var(--muted); font-size: 14px; }
+.muted { color: var(--muted); font-size: 15px; }
+
+/* ---- Bottom bar ---- */
 
 .hint-bar {
-  padding: 6px 16px;
+  padding: 8px 20px;
   background: var(--panel);
-  border-top: 1px solid var(--border);
+  border-top: 3px solid #000;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 16px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
 }
 kbd {
   display: inline-block;
-  min-width: 24px;
-  padding: 1px 7px;
-  border-radius: 6px;
-  background: var(--help);
-  color: var(--help-text);
-  font-weight: 800;
+  min-width: 26px;
+  margin-right: 6px;
+  padding: 1px 8px;
+  background: var(--yellow);
+  color: var(--ink);
+  font-family: var(--heading);
+  font-weight: 400;
   text-align: center;
+  box-shadow: inset 0 -3px 0 var(--yellow-dark);
 }
 
+/* ---- Download dialog ---- */
+
 dialog {
-  width: min(480px, calc(100vw - 32px));
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--panel);
+  width: min(500px, calc(100vw - 32px));
+  border: 3px solid #000;
+  border-top: 8px solid var(--yellow);
+  border-radius: 0;
+  background: #1b1712;
   color: var(--text);
-  padding: 20px;
+  padding: 22px;
+  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.6);
 }
-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
-dialog h2 { margin-top: 0; }
-dialog label { display: block; margin-bottom: 12px; font-weight: 700; }
+dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
+dialog h2 {
+  margin-top: 0;
+  font-family: var(--heading);
+  font-weight: 400;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+dialog label { display: block; margin-bottom: 12px; font-weight: 700; letter-spacing: 0.5px; }
 dialog input:not([type=file]), dialog textarea {
   display: block;
   width: 100%;
   margin-top: 4px;
-  padding: 10px;
+  padding: 9px 10px;
   font: inherit;
-  border-radius: 10px;
-  border: 2px solid var(--border);
-  background: var(--bg);
+  font-weight: 500;
+  border-radius: 0;
+  border: 2px solid var(--edge);
+  background: var(--panel);
   color: var(--text);
 }
-dialog input[type=file] { display: block; margin-top: 6px; color: var(--muted); }
-.install { background: var(--panel-2); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+dialog input:not([type=file]):focus, dialog textarea:focus { outline: none; border-color: var(--yellow); }
+dialog input[type=file] { display: block; margin-top: 6px; color: var(--muted); font: inherit; }
+.install { background: var(--panel); border-left: 6px solid var(--orange); padding: 10px 12px; font-size: 16px; }
 .install p { margin: 4px 0 0; }
 .error { color: var(--danger); font-weight: 700; }
-.dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
 }
 
-/* Help mode (hold T) */
+/* ---- Help mode (hold T) ---- */
+
 .help-layer {
   position: fixed;
   inset: 0;
   z-index: 1000;
   pointer-events: none;
-  background: rgba(10, 10, 14, 0.35);
+  background: rgba(8, 6, 4, 0.45);
 }
 .help-title {
   position: fixed;
-  bottom: 40px;
+  bottom: 48px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--help);
-  color: var(--help-text);
-  font-weight: 800;
+  padding: 7px 16px;
+  background: var(--yellow);
+  color: var(--ink);
+  font-family: var(--heading);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  box-shadow: 5px 5px 0 #000;
 }
 .help-label {
   position: fixed;
-  max-width: 230px;
-  padding: 6px 9px;
-  border-radius: 10px;
-  background: var(--help);
-  color: var(--help-text);
-  font-size: 13px;
-  line-height: 1.3;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  max-width: 240px;
+  padding: 7px 10px;
+  background: var(--yellow);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
+  box-shadow: 5px 5px 0 #000;
 }
-.help-label strong { display: block; font-size: 14px; }
+.help-label strong {
+  display: block;
+  font-family: var(--heading);
+  font-weight: 400;
+  font-size: 14px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
 .help-glossary {
   position: fixed;
-  right: 12px;
-  bottom: 40px;
-  width: min(300px, calc(100vw - 24px));
+  right: 14px;
+  bottom: 48px;
+  width: min(300px, calc(100vw - 28px));
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 .help-glossary .help-label { position: static; max-width: none; }
 
 @media (max-width: 700px) {
   .code-panel { position: absolute; inset: auto 0 0 0; width: 100%; height: 45%; }
-  .btn { font-size: 15px; padding: 8px 12px; }
+  .btn { font-size: 16px; padding: 7px 11px; }
+  h1 { font-size: 20px; }
+  .blocklyToolbox { padding: 12px 6px 6px !important; }
+  .blocklyToolboxCategory { padding: 4px 8px 4px 4px !important; }
+  .blocklyToolboxCategoryLabel { font-size: 16px !important; }
 }
