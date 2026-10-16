@@ -215,9 +215,15 @@
 
   document.querySelectorAll("#lang-switch [data-lang]").forEach((button) => {
     button.addEventListener("click", () => {
-      if (button.dataset.lang === window.APP.lang) return;
+      const lang = button.dataset.lang;
+      if (lang === window.APP.lang) return;
       writeStorage(currentProject());
-      window.location.href = `/lang/${button.dataset.lang}`;
+      try {
+        localStorage.setItem("tmm.lang", lang);
+      } catch {
+        // Without storage the language just isn't remembered next time.
+      }
+      window.location.href = window.APP.pages[lang];
     });
   });
 
@@ -227,7 +233,7 @@
   const errorBox = $("download-error");
 
   function showError(code) {
-    errorBox.textContent = T.errors[code] || T.errors.network;
+    errorBox.textContent = T.errors[code] || T.errors.zip_failed;
     errorBox.hidden = false;
   }
 
@@ -237,13 +243,15 @@
   });
   $("download-cancel").addEventListener("click", () => dialog.close());
 
-  function readFileBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  let defaultVox = null;
+
+  async function loadDefaultVox() {
+    if (!defaultVox) {
+      const response = await fetch(window.APP.defaultVox);
+      if (!response.ok) throw new Error(`tool model: ${response.status}`);
+      defaultVox = new Uint8Array(await response.arrayBuffer());
+    }
+    return defaultVox;
   }
 
   $("download-form").addEventListener("submit", async (event) => {
@@ -262,25 +270,26 @@
       showError("code_failed");
       return;
     }
-    const tool = workspace.getTopBlocks(false).some((b) => b.type === "td_tool" && b.isEnabled());
-    const body = { ...modInfo(), lua, tool };
+    const hasTool = workspace.getTopBlocks(false).some((b) => b.type === "td_tool" && b.isEnabled());
     try {
-      if (voxFile) body.vox = await readFileBase64(voxFile);
-      const response = await fetch("/api/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+      const vox = voxFile ? new Uint8Array(await voxFile.arrayBuffer()) : null;
+      const { bytes } = window.Modpack.buildModZip({
+        ...modInfo(),
+        lua,
+        vox,
+        hasTool,
+        defaultVox: hasTool && !vox ? await loadDefaultVox() : null,
       });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        showError(data.error);
-        return;
-      }
-      downloadBlob(await response.blob(), `${fileSlug()}.zip`);
+      downloadBlob(new Blob([bytes], { type: "application/zip" }), `${fileSlug()}.zip`);
       writeStorage(currentProject());
       dialog.close();
-    } catch {
-      showError("network");
+    } catch (error) {
+      if (error instanceof window.Modpack.ModError) {
+        showError(error.message);
+      } else {
+        console.error(error);
+        showError("zip_failed");
+      }
     }
   });
 

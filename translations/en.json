@@ -31,7 +31,7 @@
       "too_big": "Your mod is too big. Try removing some blocks.",
       "vox_too_big": "That .vox file is too big (2 MB max).",
       "not_vox": "That doesn't look like a .vox file.",
-      "network": "Couldn't reach the app. Is it still running?",
+      "zip_failed": "Couldn't make the zip. Try again, or reload the page.",
       "code_failed": "Some blocks couldn't be turned into code. Try removing the last block you added."
     }
   },

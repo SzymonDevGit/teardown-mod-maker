@@ -31,7 +31,7 @@
       "too_big": "Twój mod jest za duży. Spróbuj usunąć kilka klocków.",
       "vox_too_big": "Ten plik .vox jest za duży (maks. 2 MB).",
       "not_vox": "To nie wygląda na plik .vox.",
-      "network": "Nie można połączyć się z aplikacją. Czy nadal działa?",
+      "zip_failed": "Nie udało się zrobić pliku zip. Spróbuj jeszcze raz albo odśwież stronę.",
       "code_failed": "Nie udało się zamienić klocków na kod. Spróbuj usunąć ostatnio dodany klocek."
     }
   },

@@ -1,14 +1,18 @@
 import base64
 import io
+import json
 import re
+import shutil
 import struct
+import subprocess
 import zipfile
 from pathlib import Path
 
 import pytest
 
 from app import TRANSLATIONS, app
-from modpack import build_default_vox, slugify
+from build_static import build
+from modpack import VOX_PATH, build_default_vox
 
 LUA = 'function init()\nend\n\nfunction tick(dt)\nend\n'
 
@@ -37,62 +41,108 @@ def test_editor_defaults_to_english(client):
     assert "Download mod" in page
 
 
-def test_language_switch_sets_polish(client):
-    response = client.get("/lang/pl")
-    assert response.status_code == 302
-    page = client.get("/").get_data(as_text=True)
+def test_polish_page(client):
+    page = client.get("/pl/").get_data(as_text=True)
     assert 'lang="pl"' in page
     assert "Pobierz moda" in page
 
 
-def test_unknown_language_is_ignored(client):
-    client.get("/lang/xx")
-    assert 'lang="en"' in client.get("/").get_data(as_text=True)
+@pytest.mark.parametrize("path", ["/en/", "/xx/"])
+def test_unknown_language_page_is_missing(client, path):
+    assert client.get(path).status_code == 404
 
 
-def test_export_builds_mod_folder(client):
-    response = client.post("/api/export", json={
-        "name": "Boom Stick!", "author": "Szymon", "description": "Goes\nboom", "lua": LUA,
-    })
-    assert response.status_code == 200
-    assert response.mimetype == "application/zip"
-    with zipfile.ZipFile(io.BytesIO(response.data)) as zf:
+def test_static_build_has_every_language(tmp_path):
+    dist = build(tmp_path / "dist")
+    assert 'lang="en"' in (dist / "index.html").read_text(encoding="utf-8")
+    assert 'lang="pl"' in (dist / "pl" / "index.html").read_text(encoding="utf-8")
+    for name in ("js/main.js", "js/modpack.js", "vox/tool.vox"):
+        assert (dist / "static" / name).is_file()
+
+
+def test_tool_vox_file_matches_the_model():
+    # static/vox/tool.vox is what the browser puts in the zip. Run `python modpack.py` after changing the model.
+    assert VOX_PATH.read_bytes() == build_default_vox()
+
+
+NODE = shutil.which("node")
+MODPACK_JS = Path(__file__).resolve().parent.parent / "static" / "js" / "modpack.js"
+
+
+def run_modpack_js(**options):
+    """Build a zip with static/js/modpack.js in Node. Returns (zip bytes, None) or (None, error code)."""
+    if not NODE:
+        pytest.skip("Node.js is not installed")
+    script = """
+const M = require(process.argv[1]);
+const o = JSON.parse(require("fs").readFileSync(0, "utf8"));
+for (const k of ["vox", "defaultVox"]) if (o[k]) o[k] = Uint8Array.from(Buffer.from(o[k], "base64"));
+try {
+  process.stdout.write(JSON.stringify({ zip: Buffer.from(M.buildModZip(o).bytes).toString("base64") }));
+} catch (e) {
+  process.stdout.write(JSON.stringify({ error: e instanceof M.ModError ? e.message : String(e) }));
+}
+"""
+    for key in ("vox", "defaultVox"):
+        if options.get(key) is not None:
+            options[key] = base64.b64encode(options[key]).decode()
+    result = subprocess.run([NODE, "-e", script, str(MODPACK_JS)], input=json.dumps(options),
+                            capture_output=True, text=True, check=True)
+    out = json.loads(result.stdout)
+    return (base64.b64decode(out["zip"]), None) if "zip" in out else (None, out["error"])
+
+
+def test_zip_has_mod_folder():
+    data, _ = run_modpack_js(name="Boom Stick!", author="Szymon", description="Goes\nboom", lua=LUA,
+                             defaultVox=build_default_vox())
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        assert zf.testzip() is None
         assert sorted(zf.namelist()) == ["boom_stick/info.txt", "boom_stick/main.lua", "boom_stick/vox/tool.vox"]
         info = zf.read("boom_stick/info.txt").decode()
         assert "name = Boom Stick!\n" in info
         assert "description = Goes boom\n" in info
+        assert "tags = Tool\n" in info
         assert zf.read("boom_stick/main.lua").decode() == LUA
+        assert zf.read("boom_stick/vox/tool.vox") == build_default_vox()
 
 
-def test_export_without_tool_is_gameplay_mod(client):
-    response = client.post("/api/export", json={"name": "Lava", "lua": LUA, "tool": False})
-    with zipfile.ZipFile(io.BytesIO(response.data)) as zf:
+def test_zip_without_tool_is_gameplay_mod():
+    data, _ = run_modpack_js(name="Lava", lua=LUA, hasTool=False)
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
         assert sorted(zf.namelist()) == ["lava/info.txt", "lava/main.lua"]
         assert "tags = Gameplay\n" in zf.read("lava/info.txt").decode()
 
 
-def test_export_uses_uploaded_vox(client):
+def test_zip_uses_uploaded_vox():
     vox = b"VOX " + struct.pack("<i", 150) + b"custom"
-    response = client.post("/api/export", json={"name": "x", "lua": LUA, "vox": base64.b64encode(vox).decode()})
-    with zipfile.ZipFile(io.BytesIO(response.data)) as zf:
+    data, _ = run_modpack_js(name="x", lua=LUA, vox=vox, defaultVox=build_default_vox())
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
         assert zf.read("x/vox/tool.vox") == vox
 
 
-@pytest.mark.parametrize("body, error", [
+def test_zip_keeps_polish_text():
+    lua = 'DebugPrint("Zażółć gęślą jaźń")\n'
+    data, _ = run_modpack_js(name="Mój Łuk", lua=lua, hasTool=False)
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        assert zf.read("moj_luk/main.lua").decode() == lua
+        assert "name = Mój Łuk\n" in zf.read("moj_luk/info.txt").decode()
+
+
+@pytest.mark.parametrize("options, error", [
     ({"name": "x", "lua": "  "}, "empty_mod"),
     ({"name": "x", "lua": "x" * 300_000}, "too_big"),
-    ({"name": "x", "lua": LUA, "vox": base64.b64encode(b"not a model").decode()}, "not_vox"),
-    ({"name": "x", "lua": LUA, "vox": "%%%"}, "not_vox"),
+    ({"name": "x", "lua": LUA, "vox": b"not a model"}, "not_vox"),
+    ({"name": "x", "lua": LUA, "vox": b"VOX " + b"0" * 2_000_001}, "vox_too_big"),
 ])
-def test_export_rejects_bad_input(client, body, error):
-    response = client.post("/api/export", json=body)
-    assert response.status_code == 400
-    assert response.get_json()["error"] == error
+def test_zip_rejects_bad_input(options, error):
+    assert run_modpack_js(**options) == (None, error)
 
 
-def test_slugify_handles_polish_letters():
-    assert slugify("Mój Łuk") == "moj_luk"
-    assert slugify("!!!") == "my_mod"
+@pytest.mark.parametrize("name, slug", [("Mój Łuk", "moj_luk"), ("!!!", "my_mod"), ("Boom Stick!", "boom_stick")])
+def test_folder_name_handles_polish_letters(name, slug):
+    data, _ = run_modpack_js(name=name, lua=LUA, hasTool=False)
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        assert zf.namelist()[0].split("/")[0] == slug
 
 
 def test_default_vox_is_valid_magicavoxel():

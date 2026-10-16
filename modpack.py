@@ -1,39 +1,14 @@
-"""Builds the downloadable Teardown mod: a zip with info.txt, main.lua and a tool model."""
+"""Makes the default tool model, static/vox/tool.vox.
 
-import io
-import re
+The mod zip itself is built in the browser (static/js/modpack.js). Run this file after changing the model:
+
+    python modpack.py
+"""
+
 import struct
-import unicodedata
-import zipfile
+from pathlib import Path
 
-MAX_LUA_BYTES = 200_000
-MAX_VOX_BYTES = 2_000_000
-
-
-class ModError(ValueError):
-    """Raised when the mod details sent by the editor can't be used."""
-
-
-def slugify(text, fallback="my_mod"):
-    """Turn 'Boom Stick!' into 'boom_stick' for folder and tool ids."""
-    text = unicodedata.normalize("NFKD", text.lower().replace("ł", "l")).encode("ascii", "ignore").decode()
-    slug = re.sub(r"[^a-z0-9]+", "_", text).strip("_")
-    return slug[:40] or fallback
-
-
-def clean_line(text, limit):
-    """info.txt is one 'key = value' per line, so values must stay on one line."""
-    return " ".join(str(text or "").split())[:limit]
-
-
-def build_info_txt(name, author, description, has_tool=True):
-    # Tags sort the mod in the Steam Workshop. A mod without a tool is a gameplay mod.
-    return (
-        f"name = {clean_line(name, 60)}\n"
-        f"author = {clean_line(author, 60)}\n"
-        f"description = {clean_line(description, 300)}\n"
-        f"tags = {'Tool' if has_tool else 'Gameplay'}\n"
-    )
+VOX_PATH = Path(__file__).resolve().parent / "static" / "vox" / "tool.vox"
 
 
 # Teardown picks a voxel's material from its palette index, in rows of 8: 1-8 are glass (see-through),
@@ -105,27 +80,7 @@ def build_default_vox():
     return b"VOX " + struct.pack("<i", 150) + chunk(b"MAIN", b"", children)
 
 
-def build_mod_zip(name, author, description, lua, vox=None, has_tool=True):
-    """Return (folder_name, zip_bytes). The zip holds one folder ready for Teardown's mods folder.
-
-    The tool model is only added when the mod has a tool.
-    """
-    if not isinstance(lua, str) or not lua.strip():
-        raise ModError("empty_mod")
-    if len(lua.encode("utf-8")) > MAX_LUA_BYTES:
-        raise ModError("too_big")
-    if vox is not None:
-        if len(vox) > MAX_VOX_BYTES:
-            raise ModError("vox_too_big")
-        if not vox.startswith(b"VOX "):
-            raise ModError("not_vox")
-
-    name = clean_line(name, 60) or "My Mod"
-    folder = slugify(name)
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(f"{folder}/info.txt", build_info_txt(name, author, description, has_tool))
-        zf.writestr(f"{folder}/main.lua", lua)
-        if has_tool:
-            zf.writestr(f"{folder}/vox/tool.vox", vox or build_default_vox())
-    return folder, buffer.getvalue()
+if __name__ == "__main__":
+    VOX_PATH.parent.mkdir(parents=True, exist_ok=True)
+    VOX_PATH.write_bytes(build_default_vox())
+    print(f"Wrote {VOX_PATH}")
