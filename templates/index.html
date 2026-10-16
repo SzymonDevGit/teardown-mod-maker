@@ -4,6 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app.title }}</title>
+  <script>
+    // Open the language picked last time. English is the page at /.
+    try {
+      var saved = localStorage.getItem("tmm.lang");
+      var pages = {{ pages|tojson }};
+      if ({{ (lang == default_language)|tojson }} && saved && saved !== {{ lang|tojson }} && pages[saved]) {
+        location.replace(pages[saved]);
+      }
+    } catch (e) {}
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Barlow+Condensed:wght@500;600;700&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -24,7 +34,7 @@
       <button id="btn-code" class="btn" data-term="show_code">{{ t.app.show_code }}</button>
       <button id="btn-download" class="btn btn-primary" data-term="download">{{ t.app.download }}</button>
       <div class="lang" id="lang-switch" role="group" aria-label="{{ t.app.language }}" data-term="language">
-        {% for code in languages %}
+        {% for code in pages %}
         <button type="button" class="lang-option" data-lang="{{ code }}" lang="{{ code }}"
           title="{{ {"en": "English", "pl": "Polski"}[code] }}" aria-pressed="{{ 'true' if code == lang else 'false' }}">{{ code|upper }}</button>
         {% endfor %}
@@ -85,6 +95,8 @@
     window.APP = {
       lang: {{ lang|tojson }},
       t: {{ t|tojson }},
+      pages: {{ pages|tojson }},
+      defaultVox: {{ url_for('static', filename='vox/tool.vox')|tojson }},
       blocklyMedia: "https://unpkg.com/blockly@{{ blockly_version }}/media/"
     };
   </script>
@@ -92,6 +104,7 @@
   <script src="https://unpkg.com/blockly@{{ blockly_version }}/blocks_compressed.js"></script>
   <script src="https://unpkg.com/blockly@{{ blockly_version }}/lua_compressed.js"></script>
   <script src="https://unpkg.com/blockly@{{ blockly_version }}/msg/{{ lang }}.js"></script>
+  <script src="{{ url_for('static', filename='js/modpack.js') }}"></script>
   <script src="{{ url_for('static', filename='js/blocks.js') }}"></script>
   <script src="{{ url_for('static', filename='js/help.js') }}"></script>
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>

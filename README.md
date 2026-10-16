@@ -4,7 +4,7 @@ A website where you snap blocks together to make mods for [Teardown](https://tea
 
 - **Blocks, not code.** Drag blocks like "make a tool called Boom Stick" and "explode where I'm looking" (uses [Blockly](https://developers.google.com/blockly)).
 - **Hold T for help.** Hold the T key to see what every button, block and word on screen means.
-- **English and Polish.** Switch language in the top right. English is the default.
+- **English and Polish.** Switch language in the top right. English is the default, Polish is at `/pl/`.
 - **See the real code.** Press "Show code" to see the Lua that your blocks write.
 - **Download and play.** "Download mod" gives you a zip to drop into Teardown's mods folder.
 - **No accounts.** Your blocks save in your browser automatically. "Save" and "Open" let you keep them in a file.
@@ -66,6 +66,20 @@ Open <http://localhost:5000> in your browser. Press `Ctrl+C` in PowerShell to st
 
 The editor loads Blockly from the internet, so you need to be online.
 
+## Put it online for free (Cloudflare Pages)
+
+Everything, including building the mod zip, runs in the visitor's browser, so the website is just plain files. It never sleeps and costs nothing to host.
+
+1. Sign in at [dash.cloudflare.com](https://dash.cloudflare.com) and go to **Workers & Pages → Create → Pages → Connect to Git**.
+2. Pick the `teardown-mod-maker` repo and fill in:
+   - Production branch: `main`
+   - Build command: `pip install -r requirements.txt && python build_static.py`
+   - Build output directory: `dist`
+3. Click **Save and Deploy**. The site appears at `teardown-mod-maker.pages.dev`, and updates by itself every time `main` changes.
+4. To use your own domain, open the project's **Custom domains** tab and add it (for a domain bought through Cloudflare, it sets up the DNS for you).
+
+To try the built site on your own PC: `python build_static.py`, then `python -m http.server 8000 --directory dist` and open <http://localhost:8000>.
+
 ## Play your mod in Teardown
 
 1. Click **Download mod**, give it a name, and download the zip.
@@ -80,8 +94,10 @@ Tip: use the **show message** block to check your blocks run. The message appear
 
 | File | What it does |
 | --- | --- |
-| `app.py` | The Flask web server: shows the editor, switches language, builds the mod zip. |
-| `modpack.py` | Makes the zip: `info.txt`, `main.lua` and a default `vox/tool.vox` model. |
+| `app.py` | The Flask web server for running it on your PC: shows the editor in English (`/`) or Polish (`/pl/`). |
+| `build_static.py` | Saves the editor as plain files in `dist/` for static hosting. |
+| `static/js/modpack.js` | Makes the mod zip in the browser: `info.txt`, `main.lua` and `vox/tool.vox`. |
+| `modpack.py` | Makes the default tool model, `static/vox/tool.vox`. Run `python modpack.py` after changing it. |
 | `static/js/blocks.js` | Every Teardown block, and the Lua code each one writes. |
 | `static/js/help.js` | The hold-T help labels. |
 | `static/js/main.js` | Buttons, saving, opening, and downloading. |
@@ -96,4 +112,4 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-The tests check the mod zip, the language switch, that the Polish file has every English text, and that every block has its words and hold-T help in both languages.
+The tests check the mod zip (these need [Node.js](https://nodejs.org/), and are skipped without it), both language pages, the static build, that the Polish file has every English text, and that every block has its words and hold-T help in both languages.
