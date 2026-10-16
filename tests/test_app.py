@@ -219,3 +219,22 @@ def test_default_vox_is_solid_and_held_low():
     assert colours and min(colours) > 8
     # Moved down and forward like Teardown's example laser gun, so it isn't held at eye level.
     assert b"_t" in vox and b"0 9 -11" in vox
+
+
+def test_other_work_links_in_both_languages(client):
+    for path, heading in (("/", "Look at my other work!"), ("/pl/", "Zobacz moje inne projekty!")):
+        page = client.get(path).get_data(as_text=True)
+        assert heading in page
+        for url in ("https://szy.monster/", "https://cheltenhamdata.co.uk/", "https://www.linkedin.com/in/szy05"):
+            assert f'href="{url}"' in page
+
+
+def test_tutorial_popup_needs_a_video(client, monkeypatch):
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "TUTORIAL_VIDEO_ID", "")
+    assert "tutorial-dialog" not in client.get("/").get_data(as_text=True)
+    monkeypatch.setattr(app_module, "TUTORIAL_VIDEO_ID", "abc123XYZ_-")
+    page = client.get("/").get_data(as_text=True)
+    assert 'id="tutorial-dialog"' in page
+    assert "youtube-nocookie.com/embed/abc123XYZ_-" in page

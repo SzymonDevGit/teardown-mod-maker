@@ -14,6 +14,17 @@ LANGUAGES = ("en", "pl")
 DEFAULT_LANGUAGE = "en"
 BLOCKLY_VERSION = "12.3.1"
 
+# The YouTube video the tutorial popup plays (the part after "watch?v=" in its link).
+# While it's empty, the popup and the Tutorial button stay hidden.
+TUTORIAL_VIDEO_ID = ""
+
+# Shown in the bottom bar under "Look at my other work!".
+OTHER_WORK = (
+    ("szy.monster", "https://szy.monster/"),
+    ("Cheltenham Data", "https://cheltenhamdata.co.uk/"),
+    ("LinkedIn", "https://www.linkedin.com/in/szy05"),
+)
+
 app = Flask(__name__)
 
 
@@ -52,6 +63,8 @@ def render_editor(lang):
         pages={code: page_path(code) for code in LANGUAGES},
         t=TRANSLATIONS[lang],
         blockly_version=BLOCKLY_VERSION,
+        tutorial_video_id=TUTORIAL_VIDEO_ID,
+        other_work=OTHER_WORK,
     )
 
 

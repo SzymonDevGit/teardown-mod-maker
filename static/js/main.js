@@ -293,5 +293,30 @@
     }
   });
 
+  // ---- Tutorial video: opens by itself on the first visit only ----
+
+  const tutorial = $("tutorial-dialog");
+  if (tutorial) {
+    const video = $("tutorial-video");
+    const TUTORIAL_KEY = "tmm.tutorialSeen";
+    const openTutorial = () => {
+      video.src = video.dataset.src;
+      tutorial.showModal();
+    };
+    // Clearing the src stops the video when the popup closes.
+    tutorial.addEventListener("close", () => video.removeAttribute("src"));
+    $("btn-tutorial").addEventListener("click", openTutorial);
+
+    let seen = false;
+    try {
+      seen = localStorage.getItem(TUTORIAL_KEY) === "1";
+      localStorage.setItem(TUTORIAL_KEY, "1");
+    } catch {
+      // Without storage the popup can't remember it was shown, so it isn't forced on every visit.
+      seen = true;
+    }
+    if (!seen) openTutorial();
+  }
+
   window.addEventListener("resize", () => Blockly.svgResize(workspace));
 })();
