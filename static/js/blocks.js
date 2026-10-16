@@ -26,8 +26,9 @@
   };
 
   // No number keys: Teardown uses them to switch tools, so the kid's tool would be put away.
+  // Keys the game also uses say so in their label (E, F, Space and the mouse buttons).
   const KEYS = [
-    ["E", "e"], ["F", "f"], ["Q", "q"], ["R", "r"], ["G", "g"],
+    [B.key_e, "e"], [B.key_f, "f"], ["Q", "q"], ["R", "r"], ["G", "g"],
     ["Z", "z"], ["X", "x"], ["C", "c"], ["V", "v"], ["H", "h"], ["B", "b"], ["N", "n"],
     [B.key_space, "space"], [B.key_shift, "shift"], [B.key_lmb, "lmb"], [B.key_rmb, "rmb"],
   ];
@@ -175,19 +176,20 @@
   let needs = new Set();
 
   // Global names the helpers use, so a kid's variable can't clash with them.
-  L.addReservedWords("td_slowmo,td_timers,td_screen,td_lights,td_sounds,td_every,td_depth,dt");
+  L.addReservedWords("td_slowmo,td_timers,td_screen,td_lights,td_sounds,td_every,td_depth,td_aim,td_frame,td_started,td_colours,dt");
 
   // "My blocks" become Lua functions named by the kid. Make sure no name takes over a Teardown callback
   // (a My block called "update" would run by itself every frame) or a game function the mod calls
   // (a My block called "Explosion" that explodes would call itself forever). Blockly adds a number instead.
   const TEARDOWN_NAMES = [
-    "init", "tick", "update", "draw", "handleCommand",
+    "init", "tick", "update", "draw", "handleCommand", "render", "postUpdate",
     "ApplyBodyImpulse", "DebugPrint", "Delete", "Explosion", "GetBodyMass", "GetBool", "GetCameraTransform",
-    "GetPlayerHealth", "GetPlayerTransform", "GetPlayerVelocity", "GetShapeBody", "GetString", "GetTime",
-    "InputDown", "InputPressed", "IsBodyDynamic", "IsPlayerGrounded", "LoadSound", "MakeHole", "Paint",
+    "GetPlayerHealth", "GetPlayerTransform", "GetPlayerVehicle", "GetPlayerVelocity", "GetPostProcessingProperty",
+    "GetShapeBody", "GetString", "GetTime",
+    "InputDown", "InputPressed", "IsBodyDynamic", "IsHandleValid", "IsPlayerGrounded", "LoadSound", "MakeHole", "Paint",
     "ParticleColor", "ParticleEmissive", "ParticleGravity", "ParticleRadius", "ParticleReset", "ParticleType",
-    "PlaySound", "PointLight", "QueryRaycast", "RegisterTool", "SetBool", "SetEnvironmentProperty", "SetGravity",
-    "SetPlayerHealth", "SetPlayerTransform", "SetPlayerVelocity", "SetPostProcessingDefault",
+    "PlaySound", "PointLight", "QueryRaycast", "QueryRejectVehicle", "RegisterTool", "SetBool",
+    "SetEnvironmentProperty", "SetGravity", "SetPlayerHealth", "SetPlayerTransform", "SetPlayerVelocity",
     "SetPostProcessingProperty", "SetTimeScale", "ShakeCamera", "Shoot", "Spawn", "SpawnFire", "SpawnParticle",
     "Transform", "TransformToParentVec", "UiAlign", "UiCenter", "UiColor", "UiFont", "UiHeight", "UiPop",
     "UiPush", "UiText", "UiTextOutline", "UiTranslate", "Vec", "VecAdd", "VecLength", "VecScale",
@@ -202,20 +204,61 @@
 
   const helper = (name, code) => L.provideFunction_(name, code.replace("FN", L.FUNCTION_NAME_PLACEHOLDER_));
 
-  const lookPointFn = () => helper("td_lookPoint", `
+  // What is in the middle of the screen: the spot, which way that surface faces, the moving object there
+  // (0 if none) and the look direction. Worked out once per frame, so every block in a frame means the
+  // same spot, even after an explosion has blown away the thing I was looking at.
+  const aimFn = () => {
+    needs.add("aim");
+    return helper("td_aimNow", `
 function FN()
-  local cam = GetCameraTransform()
-  local dir = TransformToParentVec(cam, Vec(0, 0, -1))
-  local hit, dist = QueryRaycast(cam.pos, dir, 100)
-  if not hit then dist = 100 end
-  return VecAdd(cam.pos, VecScale(dir, dist))
+  if not td_aim then
+    local cam = GetCameraTransform()
+    local dir = TransformToParentVec(cam, Vec(0, 0, -1))
+    -- Look past the car I'm driving.
+    local vehicle = GetPlayerVehicle()
+    if vehicle ~= 0 then QueryRejectVehicle(vehicle) end
+    local hit, dist, normal, shape = QueryRaycast(cam.pos, dir, 100)
+    local body = 0
+    if hit then
+      body = GetShapeBody(shape)
+      if body ~= 0 and not IsBodyDynamic(body) then body = 0 end
+    else
+      dist = 100
+      normal = VecScale(dir, -1)
+    end
+    td_aim = { point = VecAdd(cam.pos, VecScale(dir, dist)), normal = normal, body = body, dir = dir }
+  end
+  return td_aim
 end`);
+  };
 
+  const lookPointFn = () => {
+    const aim = aimFn();
+    return helper("td_lookPoint", `
+function FN()
+  return ${aim}().point
+end`);
+  };
+
+  // A spot some metres ahead of my eyes. It stops just before a wall or floor instead of going through it.
   const inFrontFn = () => helper("td_inFront", `
 function FN(metres)
-  local t = GetPlayerTransform()
-  local dir = TransformToParentVec(GetCameraTransform(), Vec(0, 0, -1))
-  return VecAdd(VecAdd(t.pos, Vec(0, 1.5, 0)), VecScale(dir, metres))
+  local cam = GetCameraTransform()
+  local dir = TransformToParentVec(cam, Vec(0, 0, -1))
+  local from = cam.pos
+  if metres < 0 then
+    dir = VecScale(dir, -1)
+    metres = -metres
+  end
+  -- In a car the camera is behind it, so measure from me and look past the car.
+  local vehicle = GetPlayerVehicle()
+  if vehicle ~= 0 then
+    from = VecAdd(GetPlayerTransform().pos, Vec(0, 1.5, 0))
+    QueryRejectVehicle(vehicle)
+  end
+  local hit, dist = QueryRaycast(from, dir, metres)
+  if hit then metres = math.max(0, dist - 0.3) end
+  return VecAdd(from, VecScale(dir, metres))
 end`);
 
   const randomNearFn = () => helper("td_randomNear", `
@@ -226,19 +269,18 @@ function FN(metres, pos)
 end`);
 
   // The moving object in the middle of the screen: body handle (0 if none), hit point, look direction.
-  const lookTargetFn = () => helper("td_lookTarget", `
+  const lookTargetFn = () => {
+    const aim = aimFn();
+    return helper("td_lookTarget", `
 function FN()
-  local cam = GetCameraTransform()
-  local dir = TransformToParentVec(cam, Vec(0, 0, -1))
-  local hit, dist, normal, shape = QueryRaycast(cam.pos, dir, 100)
-  if hit then
-    local body = GetShapeBody(shape)
-    if body ~= 0 and IsBodyDynamic(body) then
-      return body, VecAdd(cam.pos, VecScale(dir, dist)), dir
-    end
+  local aim = ${aim}()
+  -- It may have been deleted earlier in this frame.
+  if aim.body ~= 0 and IsHandleValid(aim.body) then
+    return aim.body, aim.point, aim.dir
   end
   return 0
 end`);
+  };
 
   const pushTargetFn = () => {
     const target = lookTargetFn();
@@ -260,22 +302,27 @@ function FN(direction, power)
   SetPlayerVelocity(VecAdd(GetPlayerVelocity(), VecScale(dir, power)))
 end`);
 
-  const spawnBoxFn = () => helper("td_spawnBox", `
+  const spawnBoxFn = () => {
+    const aim = aimFn();
+    return helper("td_spawnBox", `
 function FN(material, metres, pos, onSurface)
   local voxels = math.max(1, math.min(50, math.floor(metres * 10 + 0.5)))
   local half = voxels * 0.05
-  -- The box sits on top of the spot. On a spot I'm looking at, pull it back towards me
-  -- so it doesn't start inside the wall or floor I'm looking at.
-  local back = Vec(0, 0, 0)
+  local centre
   if onSurface then
-    local dir = TransformToParentVec(GetCameraTransform(), Vec(0, 0, -1))
-    local flat = math.sqrt(dir[1] * dir[1] + dir[3] * dir[3])
-    if flat > 0.01 then back = VecScale(Vec(dir[1], 0, dir[3]), (half + 0.05) / flat) end
+    -- Push the box out of the wall, floor or ceiling I'm looking at, whatever the angle.
+    local n = ${aim}().normal
+    centre = VecAdd(pos, VecScale(n, half * (math.abs(n[1]) + math.abs(n[2]) + math.abs(n[3])) + 0.05))
+    -- Unless it's a ceiling, start no lower than the spot, so a big box doesn't sink into the floor.
+    if n[2] > -0.5 then centre[2] = math.max(centre[2], pos[2] + half + 0.05) end
+  else
+    -- Sit the box on top of the spot.
+    centre = VecAdd(pos, Vec(0, half + 0.05, 0))
   end
-  local corner = VecAdd(pos, Vec(-half, 0.05, -half))
   local xml = "<voxbox size='" .. voxels .. " " .. voxels .. " " .. voxels .. "' prop='true' material='" .. material .. "'/>"
-  Spawn(xml, Transform(VecAdd(corner, VecScale(back, -1))))
+  Spawn(xml, Transform(VecAdd(centre, Vec(-half, -half, -half))))
 end`);
+  };
 
   const playSoundFn = () => {
     needs.add("sounds");
@@ -375,9 +422,10 @@ end`);
   L.forBlock.td_set_health = (b) => `SetPlayerHealth(${clamp(`(${numberIn(b, "VALUE", "100")}) / 100`, 0, 1)})\n`;
   L.forBlock.td_change_health = (b) =>
     `SetPlayerHealth(${clamp(`GetPlayerHealth() + (${numberIn(b, "VALUE", "10")}) / 100`, 0, 1)})\n`;
+  // td_slowmo is the time slow motion ends, on the same clock as "after" and "every N seconds".
   L.forBlock.td_slowmo = (b) => {
     needs.add("slowmo");
-    return `td_slowmo = ${numberIn(b, "SECONDS", "3")}\n`;
+    return `td_slowmo = GetTime() + ${numberIn(b, "SECONDS", "3", O.ADDITIVE)}\n`;
   };
   // Rounded to a whole number, so "my health = 100" works and messages don't show long decimals.
   L.forBlock.td_health = () => ["math.floor(GetPlayerHealth() * 100 + 0.5)", O.HIGH];
@@ -406,16 +454,29 @@ end`);
     needs.add("screen");
     return "td_screen = {}\n";
   };
+  // The first time a filter is used, remember the level's own colours, so "normal" puts them back
+  // instead of resetting the level's look.
+  const filterFn = () => helper("td_filter", `
+function FN(kind)
+  if not td_colours then
+    local r, g, b = GetPostProcessingProperty("colorbalance")
+    td_colours = { saturation = GetPostProcessingProperty("saturation") or 1, r = r or 1, g = g or 1, b = b or 1 }
+  end
+  local level = td_colours
+  if kind == "grey" then
+    SetPostProcessingProperty("saturation", 0)
+    SetPostProcessingProperty("colorbalance", level.r, level.g, level.b)
+  elseif kind == "old" then
+    SetPostProcessingProperty("saturation", 0.4)
+    SetPostProcessingProperty("colorbalance", 1.3, 1.0, 0.7)
+  else
+    SetPostProcessingProperty("saturation", level.saturation)
+    SetPostProcessingProperty("colorbalance", level.r, level.g, level.b)
+  end
+end`);
   L.forBlock.td_filter = (b) => {
-    switch (b.getFieldValue("FILTER")) {
-      // Each filter starts from normal, so one never keeps colours from another.
-      case "grey":
-        return 'SetPostProcessingDefault()\nSetPostProcessingProperty("saturation", 0)\n';
-      case "old":
-        return 'SetPostProcessingDefault()\nSetPostProcessingProperty("saturation", 0.4)\nSetPostProcessingProperty("colorbalance", 1.3, 1.0, 0.7)\n';
-      default:
-        return "SetPostProcessingDefault()\n";
-    }
+    const kind = ["grey", "old"].includes(b.getFieldValue("FILTER")) ? b.getFieldValue("FILTER") : "normal";
+    return `${filterFn()}("${kind}")\n`;
   };
 
   // Objects
@@ -544,11 +605,14 @@ end`);
     return looping;
   }
 
-  function toolId(name, used) {
-    // Polish letters become plain ones (ż -> z), so "Różdżka" gets the id "tmmrozdzka", not "tmmrdka".
-    const plain = name.toLowerCase().replace(/ł/g, "l").normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
-    let base = plain.replace(/[^a-z0-9]+/g, "").slice(0, 24) || "tool";
-    base = "tmm" + base;
+  // Polish letters become plain ones (ż -> z), so "Różdżka" becomes "rozdzka", not "rdka".
+  const plainId = (text) =>
+    String(text).toLowerCase().replace(/ł/g, "l").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
+
+  // The id includes the mod's name, so two mods that both have a "Boom Stick" don't share one tool in the game.
+  function toolId(name, used, modName) {
+    const mod = plainId(modName).slice(0, 16);
+    let base = "tmm" + (mod ? mod + "_" : "") + (plainId(name).slice(0, 20) || "tool");
     let id = base;
     for (let n = 2; used.has(id); n++) id = base + n;
     used.add(id);
@@ -558,12 +622,14 @@ end`);
   const indent = (code) => (code ? L.prefixLines(code, L.INDENT) : "");
 
   // Turns the whole workspace into one main.lua file.
-  window.buildLua = function (workspace) {
+  window.buildLua = function (workspace, modName = "") {
     L.init(workspace);
     needs = new Set();
     loopingBlocks = findLoopingBlocks(workspace);
     const init = [];
+    const start = [];
     const tick = [];
+    const frameBodies = [];
     const state = [];
     const toolIds = new Set();
     let everyCount = 0;
@@ -584,29 +650,32 @@ end`);
       const body = L.statementToCode(block, "DO");
       switch (block.type) {
         case "td_when_start":
-          init.push(body);
+          start.push(body);
           break;
         case "td_every_frame":
-          tick.push(body);
+          // All "every frame" blocks share one loop, placed where the first of them is.
+          if (!frameBodies.length) tick.push(null);
+          frameBodies.push(body);
           break;
         case "td_when_key":
           tick.push(`  if InputPressed(${luaString(block.getFieldValue("KEY"))}) then\n${indent(body)}  end\n`);
           break;
         case "td_every_seconds": {
           const seconds = Math.max(0.1, Number(block.getFieldValue("SECONDS")) || 1);
+          // td_every[n] is the next time this runs. If the game was paused or stuck, it skips the missed turns.
           const timer = `td_every[${++everyCount}]`;
-          state.push(`${timer} = 0`);
+          state.push(`${timer} = ${seconds}`);
           tick.push(
-            `  ${timer} = ${timer} + dt\n` +
-            `  if ${timer} >= ${seconds} then\n` +
-            `    ${timer} = ${timer} - ${seconds}\n` +
+            `  if GetTime() >= ${timer} then\n` +
+            `    ${timer} = ${timer} + ${seconds}\n` +
+            `    if ${timer} <= GetTime() then ${timer} = GetTime() + ${seconds} end\n` +
             `${indent(body)}  end\n`
           );
           break;
         }
         case "td_tool": {
           const name = block.getFieldValue("NAME").trim() || B.tool_no_name;
-          const id = toolId(name, toolIds);
+          const id = toolId(name, toolIds, modName);
           init.push(`  RegisterTool("${id}", ${luaString(name)}, "MOD/vox/tool.vox")\n  SetBool("game.tool.${id}.enabled", true)\n`);
           tick.push(
             `  if GetString("game.player.tool") == "${id}" and GetBool("game.player.canusetool") and InputPressed("usetool") then\n` +
@@ -617,8 +686,29 @@ end`);
       }
     }
 
+    // "Every frame" runs 60 times a second on any computer (twice in one frame at 30 fps, and skips
+    // some frames at 144 fps), so speeds and counters in it work the same for everyone.
+    const frameBody = frameBodies.join("");
+    const frameIndex = tick.indexOf(null);
+    if (frameIndex >= 0) {
+      tick[frameIndex] = frameBody
+        ? "  td_frame = math.min(td_frame + dt, 0.1)\n" +
+          "  while td_frame > 0.0166 do\n" +
+          "    td_frame = td_frame - 1 / 60\n" +
+          (needs.has("aim") ? "    td_aim = nil\n" : "") +
+          `${indent(frameBody)}  end\n`
+        : "";
+      if (frameBody) state.push("td_frame = 0");
+    }
+
     // Things that have to happen every frame for some blocks to work.
     const everyFrame = [];
+    if (needs.has("aim")) everyFrame.push("  td_aim = nil\n");
+    if (start.some(Boolean)) {
+      // "When the game starts" runs in the first frame, when the player is already in the level.
+      state.push("td_started = false");
+      everyFrame.push(`  if not td_started then\n    td_started = true\n${indent(start.join(""))}  end\n`);
+    }
     if (needs.has("timers")) {
       state.push("td_timers = {}");
       everyFrame.push(
@@ -632,17 +722,12 @@ end`);
         "  end\n"
       );
     }
+    // Slow motion and lights come after the events, so changes made this frame count straight away.
+    const afterEvents = [];
     if (needs.has("slowmo")) {
       state.push("td_slowmo = 0");
-      everyFrame.push(
-        "  if td_slowmo > 0 then\n" +
-        "    td_slowmo = td_slowmo - dt\n" +
-        "    SetTimeScale(0.25)\n" +
-        "  end\n"
-      );
+      afterEvents.push("  if GetTime() < td_slowmo then SetTimeScale(0.25) end\n");
     }
-    // Lights are drawn after the events, so a light added this frame shows straight away.
-    const afterEvents = [];
     if (needs.has("lights")) {
       state.push("td_lights = {}");
       afterEvents.push(
@@ -685,6 +770,20 @@ end`);
       );
     }
     return parts.join("\n\n") + "\n";
+  };
+
+  // Two tools with the same name look the same in the game's tool bar, so warn on both blocks.
+  window.warnSameToolNames = (workspace) => {
+    const tools = workspace.getBlocksByType("td_tool", false).filter((b) => b.isEnabled());
+    const count = new Map();
+    for (const b of tools) {
+      const name = b.getFieldValue("NAME").trim().toLowerCase();
+      count.set(name, (count.get(name) || 0) + 1);
+    }
+    for (const b of workspace.getBlocksByType("td_tool", false)) {
+      const same = b.isEnabled() && count.get(b.getFieldValue("NAME").trim().toLowerCase()) > 1;
+      b.setWarningText(same ? B.tool_same_name : null);
+    }
   };
 
   window.hasEventBlocks = (workspace) =>

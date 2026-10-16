@@ -64,6 +64,13 @@ def test_export_builds_mod_folder(client):
         assert zf.read("boom_stick/main.lua").decode() == LUA
 
 
+def test_export_without_tool_is_gameplay_mod(client):
+    response = client.post("/api/export", json={"name": "Lava", "lua": LUA, "tool": False})
+    with zipfile.ZipFile(io.BytesIO(response.data)) as zf:
+        assert sorted(zf.namelist()) == ["lava/info.txt", "lava/main.lua"]
+        assert "tags = Gameplay\n" in zf.read("lava/info.txt").decode()
+
+
 def test_export_uses_uploaded_vox(client):
     vox = b"VOX " + struct.pack("<i", 150) + b"custom"
     response = client.post("/api/export", json={"name": "x", "lua": LUA, "vox": base64.b64encode(vox).decode()})

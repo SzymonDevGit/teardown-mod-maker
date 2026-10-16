@@ -100,16 +100,25 @@
 
   function refreshCode() {
     try {
-      $("code-output").textContent = window.buildLua(workspace);
+      $("code-output").textContent = window.buildLua(workspace, modInfo().name);
     } catch (error) {
       console.error(error);
       $("code-output").textContent = T.errors.code_failed;
     }
   }
 
+  // Tool ids include the mod's name, so the code changes with it.
+  $("mod-name").addEventListener("input", () => {
+    if (!codePanel.hidden) refreshCode();
+  });
+
+  // Blocks that aren't inside an event block never run, so they're greyed out.
+  workspace.addChangeListener(Blockly.Events.disableOrphans);
+
   let saveTimer = null;
   workspace.addChangeListener((event) => {
     if (event.isUiEvent) return;
+    window.warnSameToolNames(workspace);
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       writeStorage(currentProject());
@@ -209,13 +218,14 @@
     const voxFile = $("mod-vox").files[0];
     let lua;
     try {
-      lua = window.buildLua(workspace);
+      lua = window.buildLua(workspace, modInfo().name);
     } catch (error) {
       console.error(error);
       showError("code_failed");
       return;
     }
-    const body = { ...modInfo(), lua };
+    const tool = workspace.getTopBlocks(false).some((b) => b.type === "td_tool" && b.isEnabled());
+    const body = { ...modInfo(), lua, tool };
     try {
       if (voxFile) body.vox = await readFileBase64(voxFile);
       const response = await fetch("/api/export", {

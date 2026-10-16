@@ -26,12 +26,13 @@ def clean_line(text, limit):
     return " ".join(str(text or "").split())[:limit]
 
 
-def build_info_txt(name, author, description):
+def build_info_txt(name, author, description, has_tool=True):
+    # Tags sort the mod in the Steam Workshop. A mod without a tool is a gameplay mod.
     return (
         f"name = {clean_line(name, 60)}\n"
         f"author = {clean_line(author, 60)}\n"
         f"description = {clean_line(description, 300)}\n"
-        "tags = Tool\n"
+        f"tags = {'Tool' if has_tool else 'Gameplay'}\n"
     )
 
 
@@ -59,8 +60,11 @@ def build_default_vox():
     return b"VOX " + struct.pack("<i", 150) + chunk(b"MAIN", b"", size + xyzi + rgba)
 
 
-def build_mod_zip(name, author, description, lua, vox=None):
-    """Return (folder_name, zip_bytes). The zip holds one folder ready for Teardown's mods folder."""
+def build_mod_zip(name, author, description, lua, vox=None, has_tool=True):
+    """Return (folder_name, zip_bytes). The zip holds one folder ready for Teardown's mods folder.
+
+    The tool model is only added when the mod has a tool.
+    """
     if not isinstance(lua, str) or not lua.strip():
         raise ModError("empty_mod")
     if len(lua.encode("utf-8")) > MAX_LUA_BYTES:
@@ -75,7 +79,8 @@ def build_mod_zip(name, author, description, lua, vox=None):
     folder = slugify(name)
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(f"{folder}/info.txt", build_info_txt(name, author, description))
+        zf.writestr(f"{folder}/info.txt", build_info_txt(name, author, description, has_tool))
         zf.writestr(f"{folder}/main.lua", lua)
-        zf.writestr(f"{folder}/vox/tool.vox", vox or build_default_vox())
+        if has_tool:
+            zf.writestr(f"{folder}/vox/tool.vox", vox or build_default_vox())
     return folder, buffer.getvalue()
