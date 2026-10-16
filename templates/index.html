@@ -32,6 +32,9 @@
       <button id="btn-open" class="btn" data-term="open">{{ t.app.open }}</button>
       <button id="btn-save" class="btn" data-term="save">{{ t.app.save }}</button>
       <button id="btn-code" class="btn" data-term="show_code">{{ t.app.show_code }}</button>
+      {% if tutorial_video_id %}
+      <button id="btn-tutorial" class="btn" data-term="tutorial">{{ t.app.tutorial }}</button>
+      {% endif %}
       <button id="btn-download" class="btn btn-primary" data-term="download">{{ t.app.download }}</button>
       <div class="lang" id="lang-switch" role="group" aria-label="{{ t.app.language }}" data-term="language">
         {% for code in pages %}
@@ -53,7 +56,13 @@
   </main>
 
   <footer class="hint-bar">
-    <kbd>T</kbd> {{ t.app.help_hint }}
+    <span><kbd>T</kbd> {{ t.app.help_hint }}</span>
+    <nav class="other-work" aria-label="{{ t.app.other_work }}" data-term="other_work">
+      <strong>{{ t.app.other_work }}</strong>
+      {% for name, url in other_work %}
+      <a href="{{ url }}" target="_blank" rel="noopener">{{ name }}</a>
+      {% endfor %}
+    </nav>
   </footer>
 
   <input type="file" id="open-file" accept=".json,application/json" hidden>
@@ -85,6 +94,23 @@
       </div>
     </form>
   </dialog>
+
+  {% if tutorial_video_id %}
+  <dialog id="tutorial-dialog" class="tutorial-dialog">
+    <form method="dialog">
+      <h2>{{ t.app.tutorial_title }}</h2>
+      <p class="muted">{{ t.app.tutorial_note }}</p>
+      <div class="video">
+        <iframe id="tutorial-video" title="{{ t.app.tutorial }}" data-src="https://www.youtube-nocookie.com/embed/{{ tutorial_video_id }}?rel=0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+      </div>
+      <div class="dialog-buttons">
+        <button type="submit" class="btn btn-primary">{{ t.app.tutorial_close }}</button>
+      </div>
+    </form>
+  </dialog>
+  {% endif %}
 
   <div id="help-layer" class="help-layer" hidden>
     <div class="help-title">{{ t.app.help_title }}</div>
