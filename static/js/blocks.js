@@ -404,7 +404,8 @@ end`);
   L.forBlock.td_fire = (b) => `SpawnFire(${where(b)})\n`;
   L.forBlock.td_shoot = (b) => {
     const kind = ["bullet", "rocket", "shotgun"].includes(b.getFieldValue("KIND")) ? b.getFieldValue("KIND") : "bullet";
-    return `do local cam = GetCameraTransform() Shoot(cam.pos, TransformToParentVec(cam, Vec(0, 0, -1)), "${kind}") end\n`;
+    // Start 1 m in front of the camera: from the camera itself a rocket hits the player (or the held tool) and blows up on them.
+    return `do local cam = GetCameraTransform() local td_d = TransformToParentVec(cam, Vec(0, 0, -1)) Shoot(VecAdd(cam.pos, td_d), td_d, "${kind}") end\n`;
   };
   L.forBlock.td_paint = (b) => {
     const kind = b.getFieldValue("KIND") === "explosion" ? "explosion" : "spraycan";
