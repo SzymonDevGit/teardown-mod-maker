@@ -160,6 +160,14 @@
   <script src="https://unpkg.com/blockly@{{ blockly_version }}/blocks_compressed.js"></script>
   <script src="https://unpkg.com/blockly@{{ blockly_version }}/lua_compressed.js"></script>
   <script src="https://unpkg.com/blockly@{{ blockly_version }}/msg/{{ lang }}.js"></script>
+  <script>
+    // Without Blockly (unpkg.com blocked or down) nothing else works, so say so instead of showing a blank page.
+    if (!window.Blockly || !window.lua) {
+      const box = document.getElementById("workspace");
+      box.textContent = window.APP.t.app.load_failed;
+      box.classList.add("load-failed");
+    }
+  </script>
   <script src="{{ url_for('static', filename='js/modpack.js') }}"></script>
   <script src="{{ url_for('static', filename='js/vendor/luaparse.js') }}"></script>
   <script src="{{ url_for('static', filename='js/blocks.js') }}"></script>

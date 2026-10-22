@@ -10,9 +10,12 @@
   const START_SCALE = 1.1;
 
   // Keeps the blocks in the side panel the same size when you zoom the workspace in or out.
+  // On a phone it is made smaller, so the blocks fit next to the block list.
   class FixedSizeFlyout extends Blockly.VerticalFlyout {
     getFlyoutScale() {
-      return START_SCALE;
+      const toolbox = this.targetWorkspace.getToolbox();
+      const room = window.innerWidth - (toolbox ? toolbox.getWidth() : 0) - 30;
+      return Math.max(0.55, Math.min(START_SCALE, room / 480));
     }
   }
 
@@ -73,8 +76,11 @@
       } finally {
         Blockly.Events.enable();
       }
+      window.warnSameToolNames(workspace);
+      window.warnLuaCode(workspace);
     }).catch(() => {});
   }
+  if (document.fonts) document.fonts.ready.then(() => Blockly.svgResize(workspace)).catch(() => {});
 
   // ---- Saving: blocks and mod details live in the browser, and in files ----
 
@@ -89,8 +95,10 @@
   function writeStorage(project) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+      return true;
     } catch {
       // Private windows can block storage; the editor still works without it.
+      return false;
     }
   }
 
@@ -111,31 +119,84 @@
     };
   }
 
+  // Blocks this editor doesn't know (from a newer or older version) are left out, so the rest still opens.
+  function withoutUnknownBlocks(state) {
+    let dropped = 0;
+    const clean = (block) => {
+      while (block && !Blockly.Blocks[block.type]) {
+        dropped++;
+        block = block.next && block.next.block;
+      }
+      if (!block || typeof block !== "object") return null;
+      for (const [name, input] of Object.entries(block.inputs || {})) {
+        if (input.shadow && !Blockly.Blocks[input.shadow.type]) delete input.shadow;
+        if (input.block) input.block = clean(input.block);
+        if (!input.block) delete input.block;
+        if (!input.block && !input.shadow) delete block.inputs[name];
+      }
+      if (block.next) {
+        block.next.block = clean(block.next.block);
+        if (!block.next.block) delete block.next;
+      }
+      return block;
+    };
+    const copy = JSON.parse(JSON.stringify(state));
+    if (copy.blocks && Array.isArray(copy.blocks.blocks)) copy.blocks.blocks = copy.blocks.blocks.map(clean).filter(Boolean);
+    return { state: copy, dropped };
+  }
+
+  // Returns how many unknown blocks were left out. If the file still can't be read, the old blocks stay.
   function loadProject(project) {
     if (!project || project.format !== "teardown-mod-maker" || !project.blocks) {
       throw new Error("not a project");
     }
-    workspace.clear();
-    Blockly.serialization.workspaces.load(project.blocks, workspace);
+    const { state, dropped } = withoutUnknownBlocks(project.blocks);
+    const before = Blockly.serialization.workspaces.save(workspace);
+    try {
+      workspace.clear();
+      Blockly.serialization.workspaces.load(state, workspace);
+    } catch (error) {
+      // Blockly stops part way through and leaves resizing off, so turn it back on and put the old blocks back.
+      workspace.setResizesEnabled(true);
+      Blockly.Events.setGroup(false);
+      workspace.clear();
+      Blockly.serialization.workspaces.load(before, workspace);
+      throw error;
+    }
+    $("mod-vox").value = "";
+    $("mod-shoot-vox").value = "";
     const info = project.info || {};
     $("mod-name").value = info.name || T.mod_name_default;
     $("mod-author").value = info.author || "";
     $("mod-description").value = info.description || "";
     workspace.clearUndo();
+    return dropped;
   }
 
   function startFresh() {
     workspace.clear();
     Blockly.serialization.workspaces.load(window.STARTER, workspace);
+    $("mod-vox").value = "";
+    $("mod-shoot-vox").value = "";
     $("mod-name").value = T.mod_name_default;
     $("mod-author").value = "";
     $("mod-description").value = "";
     workspace.clearUndo();
   }
 
+  const saved = readStorage();
   try {
-    loadProject(readStorage());
+    const dropped = loadProject(saved);
+    if (dropped) setTimeout(() => alert(T.blocks_skipped.replace("%1", dropped)));
   } catch {
+    // Keep a copy of a saved mod the editor couldn't open, instead of writing over it.
+    if (saved) {
+      try {
+        localStorage.setItem(STORAGE_KEY + ".broken", JSON.stringify(saved));
+      } catch {
+        // Nothing more to do without storage.
+      }
+    }
     startFresh();
   }
 
@@ -162,16 +223,20 @@
   workspace.addChangeListener(Blockly.Events.disableOrphans);
 
   let saveTimer = null;
-  workspace.addChangeListener((event) => {
-    if (event.isUiEvent) return;
-    window.warnSameToolNames(workspace);
-    window.warnLuaCode(workspace);
+  function saveSoon() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       writeStorage(currentProject());
       if (!codePanel.hidden) refreshCode();
     }, 300);
+  }
+  workspace.addChangeListener((event) => {
+    if (event.isUiEvent) return;
+    window.warnSameToolNames(workspace);
+    window.warnLuaCode(workspace);
+    saveSoon();
   });
+  for (const id of ["mod-name", "mod-author", "mod-description"]) $(id).addEventListener("input", saveSoon);
 
   codeButton.addEventListener("click", () => {
     codePanel.hidden = !codePanel.hidden;
@@ -200,10 +265,7 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  function fileSlug() {
-    const name = $("mod-name").value || T.mod_name_default;
-    return name.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/ł/g, "l").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "my_mod";
-  }
+  const fileSlug = () => window.Modpack.slugify($("mod-name").value || T.mod_name_default);
 
   $("btn-save").addEventListener("click", () => {
     const json = JSON.stringify(currentProject(), null, 2);
@@ -215,9 +277,11 @@
     const file = event.target.files[0];
     event.target.value = "";
     if (!file) return;
+    if (!confirm(T.confirm_open)) return;
     try {
-      loadProject(JSON.parse(await file.text()));
+      const dropped = loadProject(JSON.parse(await file.text()));
       writeStorage(currentProject());
+      if (dropped) alert(T.blocks_skipped.replace("%1", dropped));
     } catch {
       alert(T.open_failed);
     }
@@ -263,7 +327,7 @@
     button.addEventListener("click", () => {
       const lang = button.dataset.lang;
       if (lang === window.APP.lang) return;
-      writeStorage(currentProject());
+      if (!writeStorage(currentProject()) && !confirm(T.confirm_lang_lose)) return;
       try {
         localStorage.setItem("tmm.lang", lang);
       } catch {
