@@ -121,6 +121,18 @@
       colour: COLOURS.events,
       hat: "cap",
     },
+    {
+      // Like a machine gun: goes off when you press the mouse button, then again every few seconds while you hold it.
+      type: "td_tool_auto",
+      message0: B.tool_auto,
+      args0: [{ type: "field_input", name: "NAME", text: B.tool_auto_default_name }],
+      message1: B.tool_auto_use,
+      args1: [{ type: "field_number", name: "SECONDS", value: 0.2, min: 0.05, max: 60, precision: 0.05 }],
+      message2: "%1",
+      args2: [statement],
+      colour: COLOURS.events,
+      hat: "cap",
+    },
 
     // Actions
     actionBlock("td_explode", COLOURS.actions, B.explode, [place("WHERE"), number("SIZE")]),
@@ -488,7 +500,7 @@ end`);
   const clamp = (code, min, max) => `math.max(${min}, math.min(${max}, ${code}))`;
 
   // Event blocks are put together by buildLua, so they write nothing themselves.
-  const EVENT_TYPES = new Set(["td_when_start", "td_every_frame", "td_when_key", "td_every_seconds", "td_while_every", "td_tool"]);
+  const EVENT_TYPES = new Set(["td_when_start", "td_every_frame", "td_when_key", "td_every_seconds", "td_while_every", "td_tool", "td_tool_auto"]);
   for (const type of EVENT_TYPES) L.forBlock[type] = () => "";
 
   // Actions
@@ -993,12 +1005,24 @@ end`);
           );
           break;
         }
-        case "td_tool": {
+        case "td_tool":
+        case "td_tool_auto": {
           const name = block.getFieldValue("NAME").trim() || B.tool_no_name;
           const id = toolId(name, toolIds, modName);
           init.push(`  RegisterTool("${id}", ${luaString(name)}, "MOD/vox/tool.vox")\n  SetBool("game.tool.${id}.enabled", true)\n`);
+          const holding = `GetString("game.player.tool") == "${id}" and GetBool("game.player.canusetool")`;
+          if (block.type === "td_tool") {
+            tick.push(`  if ${holding} and InputPressed("usetool") then\n${indent(body)}  end\n`);
+            break;
+          }
+          // Goes off as soon as the button goes down, then every N seconds while it stays down.
+          // Letting go and clicking again can't make it go faster than that.
+          const seconds = Math.max(0.05, Number(block.getFieldValue("SECONDS")) || 0.2);
+          const timer = `td_every[${++everyCount}]`;
+          state.push(`${timer} = 0`);
           tick.push(
-            `  if GetString("game.player.tool") == "${id}" and GetBool("game.player.canusetool") and InputPressed("usetool") then\n` +
+            `  if ${holding} and InputDown("usetool") and GetTime() >= ${timer} then\n` +
+            `    ${timer} = GetTime() + ${seconds}\n` +
             `${indent(body)}  end\n`
           );
           break;
@@ -1159,13 +1183,14 @@ end`);
 
   // Two tools with the same name look the same in the game's tool bar, so warn on both blocks.
   window.warnSameToolNames = (workspace) => {
-    const tools = workspace.getBlocksByType("td_tool", false).filter((b) => b.isEnabled());
+    const all = [...workspace.getBlocksByType("td_tool", false), ...workspace.getBlocksByType("td_tool_auto", false)];
+    const tools = all.filter((b) => b.isEnabled());
     const count = new Map();
     for (const b of tools) {
       const name = b.getFieldValue("NAME").trim().toLowerCase();
       count.set(name, (count.get(name) || 0) + 1);
     }
-    for (const b of workspace.getBlocksByType("td_tool", false)) {
+    for (const b of all) {
       const same = b.isEnabled() && count.get(b.getFieldValue("NAME").trim().toLowerCase()) > 1;
       b.setWarningText(same ? B.tool_same_name : null);
     }
@@ -1223,6 +1248,7 @@ end`);
     contents: [
       category("events", COLOURS.events, [
         block("td_tool"),
+        block("td_tool_auto"),
         block("td_when_key"),
         block("td_when_start"),
         block("td_every_seconds"),
@@ -1333,7 +1359,7 @@ end`);
 
   // Which help entry ("term") explains each block, for the hold-T help.
   window.BLOCK_TERMS = {
-    td_when_start: "when_start", td_every_frame: "every_frame", td_when_key: "when_key", td_tool: "tool",
+    td_when_start: "when_start", td_every_frame: "every_frame", td_when_key: "when_key", td_tool: "tool", td_tool_auto: "tool_auto",
     td_every_seconds: "every_seconds",
     td_explode: "explode", td_hole: "hole", td_fire: "fire", td_shoot: "shoot", td_message: "message",
     td_paint: "paint", td_shake: "shake", td_sound: "sound",

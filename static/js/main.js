@@ -324,7 +324,7 @@
       showError("code_failed");
       return;
     }
-    const hasTool = workspace.getTopBlocks(false).some((b) => b.type === "td_tool" && b.isEnabled());
+    const hasTool = workspace.getTopBlocks(false).some((b) => ["td_tool", "td_tool_auto"].includes(b.type) && b.isEnabled());
     try {
       const vox = voxFile ? new Uint8Array(await voxFile.arrayBuffer()) : null;
       const extraFiles = await shootModels();
