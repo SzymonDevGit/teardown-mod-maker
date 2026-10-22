@@ -18,6 +18,9 @@ BLOCKLY_VERSION = "12.3.1"
 # While it's empty, the popup and the Tutorial button stay hidden.
 TUTORIAL_VIDEO_ID = "EEuTusiPb7M"
 
+# Discord server for bug reports and suggestions, shown in the bottom bar.
+DISCORD_URL = "https://discord.gg/bHxaXgjpfe"
+
 # Shown in the bottom bar under "Look at my other work!".
 OTHER_WORK = (
     ("szy.monster", "https://szy.monster/"),
@@ -65,6 +68,7 @@ def render_editor(lang):
         blockly_version=BLOCKLY_VERSION,
         tutorial_video_id=TUTORIAL_VIDEO_ID,
         other_work=OTHER_WORK,
+        discord_url=DISCORD_URL,
     )
 
 
