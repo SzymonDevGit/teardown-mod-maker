@@ -129,20 +129,29 @@
     ]);
   }
 
-  // ---- 4. Superhero Kit: powers, on/off switches with variables, and lots of the newer blocks ----
+  // ---- 4. Superhero Kit: a laser that fires while you hold a key, and on/off switches made with variables ----
   function superhero() {
     const t = X.superhero;
     // A key that turns something on, and off again the next time you press it.
     const toggle = (key, variable, on, off) => event("td_when_key", { KEY: key }, stack(
       when([[compare(get(variable), "EQ", num(0)), stack(...on, set(variable, num(1)))]], stack(...off, set(variable, num(0)))),
     ));
+    const showKeys = () => block("td_screen_text", { SPOT: "bottom" }, { TEXT: str(t.keys_text) });
     return project("superhero", [
       event("td_when_start", null, stack(
         block("td_power", { POWER: "god", ON: "on" }),
         block("td_power", { POWER: "jump", ON: "on" }),
-        block("td_screen_text", { SPOT: "bottom" }, { TEXT: str(t.keys_text) }),
+        showKeys(),
+        block("td_message", null, { TEXT: str(t.keys_again) }),
       )),
-      event("td_tool", { NAME: t.tool }, stack(block("td_laser", { COLOUR: "red" }))),
+      {
+        // No tool, so the words show whatever you're holding. Each new beam starts before the last one fades.
+        type: "td_while_every", fields: { SECONDS: 0.1 },
+        inputs: {
+          COND: { block: { type: "td_key_held", fields: { KEY: "h" } } },
+          DO: stack(block("td_laser", { COLOUR: "red" })),
+        },
+      },
       toggle("g", t.var_flying,
         [block("td_power", { POWER: "fly", ON: "on" }), block("td_message", null, { TEXT: str(t.fly_on) })],
         [block("td_power", { POWER: "fly", ON: "off" }), block("td_message", null, { TEXT: str(t.fly_off) })]),
@@ -156,6 +165,8 @@
       )),
       event("td_when_key", { KEY: "c" }, stack(block("td_freeze", { DO: "freeze" }))),
       event("td_when_key", { KEY: "x" }, stack(block("td_freeze", { DO: "all" }))),
+      // Showing the same words again doesn't restart their fade, so clear the screen first.
+      event("td_when_key", { KEY: "q" }, stack(block("td_clear_screen"), showKeys())),
     ]);
   }
 

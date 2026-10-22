@@ -14,7 +14,7 @@ A website where you snap blocks together to make mods for [Teardown](https://tea
 
 | Group | Blocks |
 | --- | --- |
-| Events | make a tool, when a key is pressed, when the game starts, every few seconds, every frame, while something is true do this every few seconds |
+| Events | make a tool, make an automatic tool (keeps going while you hold the mouse button), when a key is pressed, when the game starts, every few seconds, every frame, while something is true do this every few seconds |
 | Actions | explode, make a hole, start a fire, shoot, paint, shake the screen, play a sound, show a message, shoot an object (ball, crate, barrel, brick, wrecking ball or your own .vox model), laser, lightning |
 | Player | launch, push me, teleport, set or change health, slow motion, my health, my speed, key held down, on the ground, powers (god mode, fly, super jump, super speed), zoom, I'm in a car, boost my car |
 | Places | where I'm looking, my position, in front of me, above a place, a random spot near a place, where my last shot is |
