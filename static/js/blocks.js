@@ -13,6 +13,16 @@
   // No "Describe this function..." note on every new My block.
   Blockly.Msg.PROCEDURES_DEFNORETURN_COMMENT = "";
   Blockly.Msg.PROCEDURES_DEFRETURN_COMMENT = "";
+  // Blockly's own Polish right-click menu mixes the words "Bloki" and "klocki", with odd capital letters.
+  if (window.APP.lang === "pl") {
+    Object.assign(Blockly.Msg, {
+      ADD_COMMENT: "Dodaj komentarz", CLEAN_UP: "Uporządkuj klocki", COLLAPSE_ALL: "Zwiń klocki",
+      COLLAPSE_BLOCK: "Zwiń klocek", DELETE_BLOCK: "Usuń klocek", DELETE_X_BLOCKS: "Usuń klocki (%1)",
+      DISABLE_BLOCK: "Wyłącz klocek", DUPLICATE_BLOCK: "Powiel", ENABLE_BLOCK: "Włącz klocek",
+      EXPAND_ALL: "Rozwiń klocki", EXPAND_BLOCK: "Rozwiń klocek", EXTERNAL_INPUTS: "Wejścia na zewnątrz",
+      INLINE_INPUTS: "Wejścia w środku", DELETE_VARIABLE_CONFIRMATION: "Usunąć zmienną '%2' (użytą %1 razy)?",
+    });
+  }
 
   const COLOURS = {
     events: "#c98a00",
@@ -275,7 +285,7 @@
   let needs = new Set();
 
   // Global names the helpers use, so a kid's variable can't clash with them.
-  L.addReservedWords("td_slowmo,td_timers,td_screen,td_messages,td_tools,td_beams,td_powers,td_zoom,td_frozen,td_lastShot,td_lights,td_sounds,td_every,td_depth,td_aim,td_frame,td_started,td_colours,dt");
+  L.addReservedWords("td_slowmo,td_timers,td_screen,td_messages,td_tools,td_beams,td_powers,td_zoom,td_frozen,td_lastShot,td_lights,td_sounds,td_every,td_depth,td_calls,td_aim,td_frame,td_started,td_colours,td_level,td_weatherNow,td_rainOn,td_boxTime,td_boxCount,dt");
 
   // "My blocks" become Lua functions named by the kid. Make sure no name takes over a Teardown callback
   // (a My block called "update" would run by itself every frame) or a game function the mod calls
@@ -292,7 +302,7 @@
     "InputDown", "InputPressed", "IsBodyDynamic", "IsHandleValid", "IsPlayerGrounded", "LoadSound", "MakeHole", "Paint",
     "ParticleColor", "ParticleEmissive", "ParticleGravity", "ParticleRadius", "ParticleReset", "ParticleType",
     "PlaySound", "PointLight", "QueryRaycast", "QueryRejectVehicle", "RegisterTool", "SetBool",
-    "SetEnvironmentProperty", "SetGravity", "SetPlayerHealth", "SetPlayerTransform", "SetPlayerVelocity",
+    "GetEnvironmentProperty", "SetEnvironmentProperty", "SetGravity", "SetPlayerHealth", "SetPlayerTransform", "SetPlayerVelocity",
     "SetPlayerRegenerationState", "SetPostProcessingProperty", "SetTimeScale", "ShakeCamera", "Shoot", "Spawn", "SpawnFire", "SpawnParticle",
     "Transform", "TransformToParentVec", "UiAlign", "UiCenter", "UiColor", "UiFont", "UiHeight", "UiPop",
     "UiPush", "UiText", "UiTextOutline", "UiTranslate", "Vec", "VecAdd", "VecLength", "VecScale",
@@ -304,6 +314,12 @@
     const plain = String(name).replace(/ł/g, "l").replace(/Ł/g, "L").normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
     return safeName.call(this, plain);
   };
+
+  // Line breaks in text become \n, so indenting the code can't add spaces inside the text.
+  L.quote_ = (text) =>
+    "'" + String(text).replace(/\\/g, "\\\\").replace(/\r\n?|\n/g, "\\n").replace(/'/g, "\\'") + "'";
+  const prefixLines = L.prefixLines.bind(L);
+  L.prefixLines = (text, prefix) => prefixLines(String(text).replace(/\r\n?/g, "\n"), prefix);
 
   const helper = (name, code) => L.provideFunction_(name, code.replace("FN", L.FUNCTION_NAME_PLACEHOLDER_));
 
@@ -425,6 +441,10 @@ function FN(material, metres, pos, onSurface)
     -- Sit the box on top of the spot.
     centre = VecAdd(pos, Vec(0, half + 0.05, 0))
   end
+  -- Boxes made in the same frame (like in "repeat") stack up instead of all appearing in one spot. At most 20.
+  if td_boxTime == GetTime() then td_boxCount = td_boxCount + 1 else td_boxTime, td_boxCount = GetTime(), 0 end
+  if td_boxCount >= 20 then return end
+  centre = VecAdd(centre, Vec(0, td_boxCount * (half * 2 + 0.05), 0))
   local xml = "<voxbox size='" .. voxels .. " " .. voxels .. " " .. voxels .. "' prop='true' material='" .. material .. "'/>"
   Spawn(xml, Transform(VecAdd(centre, Vec(-half, -half, -half))))
 end`);
@@ -497,6 +517,20 @@ end`);
     return gives(block, "WHERE", "Place") ? code : `${placeFn()}(${code})`;
   };
   const luaString = (text) => JSON.stringify(String(text));
+  const textFn = () => helper("td_text", `
+function FN(value)
+  if type(value) == "table" and type(value[1]) == "number" and type(value[2]) == "number" and type(value[3]) == "number" then
+    return string.format("%.1f, %.1f, %.1f", value[1], value[2], value[3])
+  end
+  if value == true then return ${luaString(Blockly.Msg.LOGIC_BOOLEAN_TRUE)} end
+  if value == false then return ${luaString(Blockly.Msg.LOGIC_BOOLEAN_FALSE)} end
+  return tostring(value)
+end`);
+  const textIn = (block, name, fallback) => {
+    const code = L.valueToCode(block, name, O.NONE);
+    if (!code) return fallback;
+    return gives(block, name, "String") ? code : `${textFn()}(${code})`;
+  };
   const clamp = (code, min, max) => `math.max(${min}, math.min(${max}, ${code}))`;
 
   // Event blocks are put together by buildLua, so they write nothing themselves.
@@ -526,7 +560,7 @@ function FN(text)
 end`);
   L.forBlock.td_message = (b) => {
     needs.add("messages");
-    return `${sayFn()}(${val(b, "TEXT", '""')})\n`;
+    return `${sayFn()}(${textIn(b, "TEXT", '""')})\n`;
   };
 
   // Player (health in Teardown goes from 0 to 1; the blocks use 0 to 100 so it reads like a percent)
@@ -534,7 +568,15 @@ end`);
     `do local td_v = GetPlayerVelocity() SetPlayerVelocity(Vec(td_v[1], ${clamp(numberIn(b, "POWER", "10"), -100, 100)}, td_v[3])) end\n`;
   L.forBlock.td_push_me = (b) => `${pushMeFn()}(${luaString(b.getFieldValue("DIR"))}, ${clamp(numberIn(b, "POWER", "10"), -100, 100)})\n`;
   // Keep the way the player is facing, or every teleport would turn the camera.
-  L.forBlock.td_teleport = (b) => `SetPlayerTransform(Transform(${where(b)}, GetPlayerTransform().rot))\n`;
+  // It stops 0.6 m short of the spot (towards me), so I don't land inside the wall I'm looking at.
+  L.forBlock.td_teleport = (b) => `${helper("td_teleport", `
+function FN(pos)
+  local me = GetPlayerTransform()
+  local back = VecSub(me.pos, pos)
+  local distance = VecLength(back)
+  if distance > 1 then pos = VecAdd(pos, VecScale(back, 0.6 / distance)) end
+  SetPlayerTransform(Transform(pos, me.rot))
+end`)}(${where(b)})\n`;
   L.forBlock.td_set_health = (b) => `SetPlayerHealth(${clamp(`(${numberIn(b, "VALUE", "100")}) / 100`, 0, 1)})\n`;
   L.forBlock.td_change_health = (b) =>
     `SetPlayerHealth(${clamp(`GetPlayerHealth() + (${numberIn(b, "VALUE", "10")}) / 100`, 0, 1)})\n`;
@@ -574,7 +616,7 @@ end`);
   L.forBlock.td_screen_text = (b) => {
     needs.add("screen");
     const spot = ["top", "middle", "bottom"].includes(b.getFieldValue("SPOT")) ? b.getFieldValue("SPOT") : "middle";
-    return `${showFn()}("${spot}", ${val(b, "TEXT", '""')})\n`;
+    return `${showFn()}("${spot}", ${textIn(b, "TEXT", '""')})\n`;
   };
   L.forBlock.td_clear_screen = () => {
     needs.add("screen");
@@ -632,23 +674,50 @@ end`);
   };
   L.forBlock.td_particles = (b) =>
     `${particlesFn()}("${b.getFieldValue("KIND") === "sparks" ? "sparks" : "smoke"}", ${where(b)})\n`;
-  L.forBlock.td_rain = (b) => {
-    const amount = b.getFieldValue("ON") === "on" ? "0.8" : "0";
-    return `SetEnvironmentProperty("rain", ${amount})\nSetEnvironmentProperty("wetness", ${amount})\n`;
+  // The weather and time of day. Each one starts from the level's own look (saved the first time),
+  // so they don't pile up, and rain stays on or off whatever the weather.
+  const weatherFn = () => helper("td_weather", `
+function FN(kind)
+  local names = { "skyboxtint", "suncolortint", "fogcolor", "skyboxbrightness", "sunbrightness", "nightlight",
+    "fogparams", "snowamount", "snowdir", "rain", "wetness" }
+  if not td_level then
+    td_level = {}
+    for _, name in ipairs(names) do
+      td_level[name] = { n = select("#", GetEnvironmentProperty(name)), GetEnvironmentProperty(name) }
+    end
+  end
+  td_weatherNow = kind or td_weatherNow
+  for _, name in ipairs(names) do
+    local saved = td_level[name]
+    if saved.n > 0 then SetEnvironmentProperty(name, unpack(saved, 1, math.min(saved.n, 4))) end
+  end
+  if td_rainOn then
+    SetEnvironmentProperty("rain", td_rainOn)
+    SetEnvironmentProperty("wetness", td_rainOn)
+  end
+  local w = td_weatherNow
+  if w == "sunset" then
+    SetEnvironmentProperty("skyboxtint", 1, 0.55, 0.35)
+    SetEnvironmentProperty("suncolortint", 1, 0.55, 0.3)
+    SetEnvironmentProperty("fogcolor", 1, 0.6, 0.4)
+  elseif w == "night" then
+    SetEnvironmentProperty("skyboxbrightness", 0.05)
+    SetEnvironmentProperty("sunbrightness", 0)
+    SetEnvironmentProperty("nightlight", true)
+  elseif w == "fog" then
+    SetEnvironmentProperty("fogcolor", 0.75, 0.75, 0.8)
+    SetEnvironmentProperty("fogparams", 2, 30, 0.95, 2)
+  elseif w == "snow" then
+    SetEnvironmentProperty("snowamount", 0.7, 0.7)
+    SetEnvironmentProperty("snowdir", 0, -1, 0, 0.3)
+    SetEnvironmentProperty("fogcolor", 0.85, 0.85, 0.9)
+  end
+end`);
+  L.forBlock.td_rain = (b) => `td_rainOn = ${b.getFieldValue("ON") === "on" ? "0.8" : "0"}\n${weatherFn()}()\n`;
+  L.forBlock.td_weather = (b) => {
+    const kind = ["day", "sunset", "night", "fog", "snow"].includes(b.getFieldValue("WEATHER")) ? b.getFieldValue("WEATHER") : "day";
+    return `${weatherFn()}("${kind}")\n`;
   };
-
-  // The weather and time of day. Each one starts from the game's default look, so they don't pile up.
-  const WEATHER = {
-    day: "",
-    sunset: 'SetEnvironmentProperty("skyboxtint", 1, 0.55, 0.35)\nSetEnvironmentProperty("suncolortint", 1, 0.55, 0.3)\n' +
-      'SetEnvironmentProperty("fogcolor", 1, 0.6, 0.4)\n',
-    night: 'SetEnvironmentProperty("skyboxbrightness", 0.05)\nSetEnvironmentProperty("sunbrightness", 0)\n' +
-      'SetEnvironmentProperty("nightlight", true)\n',
-    fog: 'SetEnvironmentProperty("fogcolor", 0.75, 0.75, 0.8)\nSetEnvironmentProperty("fogparams", 2, 30, 0.95, 2)\n',
-    snow: 'SetEnvironmentProperty("snowamount", 0.7, 0.7)\nSetEnvironmentProperty("snowdir", 0, -1, 0, 0.3)\n' +
-      'SetEnvironmentProperty("fogcolor", 0.85, 0.85, 0.9)\n',
-  };
-  L.forBlock.td_weather = (b) => `SetEnvironmentDefault()\n${WEATHER[b.getFieldValue("WEATHER")] ?? ""}`;
 
   // Things to shoot: the five models in static/vox/shoot/, or the kid's own .vox file (added to the zip by main.js).
   const shootThingFn = () => {
@@ -809,9 +878,10 @@ end`)}("${["freeze", "unfreeze", "all"].includes(b.getFieldValue("DO")) ? b.getF
   };
 
   // Code: the kid's own Lua goes into the mod exactly as typed.
+  // In its own do ... end, so a "return" at the end only leaves this block instead of breaking the mod.
   L.forBlock.td_lua = (b) => {
     const code = String(b.getFieldValue("CODE") || "").trim();
-    return code ? code + "\n" : "";
+    return code ? `do\n${code}\nend\n` : "";
   };
   L.forBlock.td_lua_value = (b) => {
     const code = String(b.getFieldValue("CODE") || "").trim();
@@ -819,18 +889,59 @@ end`)}("${["freeze", "unfreeze", "all"].includes(b.getFieldValue("DO")) ? b.getF
   };
   L.forBlock.td_lua_top = () => "";
 
+  // A number too big to write (like "infinity") would come out as the word "Infinity", which Lua doesn't know.
+  const numberBlock = L.forBlock.math_number;
+  L.forBlock.math_number = (b, generator) => {
+    const n = Number(b.getFieldValue("NUM"));
+    if (Number.isNaN(n)) return ["0", O.ATOMIC];
+    if (!Number.isFinite(n)) return [n > 0 ? "math.huge" : "-math.huge", n > 0 ? O.HIGH : O.UNARY];
+    return numberBlock(b, generator);
+  };
+
   // Kids often add to a score before setting it, and join numbers into text.
   // Blockly's Lua for these crashes on a variable that has no value yet, so make them forgiving.
   L.forBlock.math_change = (b) => {
     const name = L.getVariableName(b.getFieldValue("VAR"));
-    return `${name} = (tonumber(${name}) or 0) + ${L.valueToCode(b, "DELTA", O.ADDITIVE) || "0"}\n`;
+    return `${name} = (tonumber(${name}) or 0) + ${numberIn(b, "DELTA", "0", O.ADDITIVE)}\n`;
   };
   L.forBlock.text_join = (b) => {
     const parts = [];
     for (let i = 0; i < b.itemCount_; i++) {
-      parts.push(`tostring(${L.valueToCode(b, "ADD" + i, O.NONE) || "''"})`);
+      parts.push(textIn(b, "ADD" + i, "''"));
     }
     return parts.length ? [parts.join(" .. "), O.CONCATENATION] : ["''", O.ATOMIC];
+  };
+
+  const truthyFn = () => helper("td_truthy", `
+function FN(value)
+  return value ~= nil and value ~= false and value ~= 0 and value ~= ""
+end`);
+  const boolIn = (block, name, order) => {
+    const isBool = gives(block, name, "Boolean");
+    const code = L.valueToCode(block, name, isBool ? order : O.NONE);
+    if (!code) return "";
+    return isBool ? code : `${truthyFn()}(${code})`;
+  };
+  L.forBlock.controls_if = (b) => {
+    let code = "";
+    let n = 0;
+    do {
+      code += `${n ? "elseif" : "if"} ${boolIn(b, "IF" + n, O.NONE) || "false"} then\n${L.statementToCode(b, "DO" + n)}`;
+      n++;
+    } while (b.getInput("IF" + n));
+    if (b.getInput("ELSE")) code += `else\n${L.statementToCode(b, "ELSE")}`;
+    return code + "end\n";
+  };
+  L.forBlock.logic_negate = (b) => [`not ${boolIn(b, "BOOL", O.UNARY) || "true"}`, O.UNARY];
+  L.forBlock.logic_operation = (b) => {
+    const and = b.getFieldValue("OP") === "AND";
+    const order = and ? O.AND : O.OR;
+    let a = boolIn(b, "A", order);
+    let c = boolIn(b, "B", order);
+    if (!a && !c) a = c = "false";
+    a = a || (and ? "true" : "false");
+    c = c || (and ? "true" : "false");
+    return [`${a} ${and ? "and" : "or"} ${c}`, order];
   };
 
   // Maths and "bigger than" only work on numbers, so a variable holding text counts as 0 instead of crashing.
@@ -851,7 +962,9 @@ end`)}("${["freeze", "unfreeze", "all"].includes(b.getFieldValue("DO")) ? b.getF
   // Lua's math.random stops the mod if "from" is bigger than "to", so swap them.
   const randomFn = () => helper("td_random", `
 function FN(from, to)
-  from, to = math.floor(from), math.floor(to)
+  if from ~= from or to ~= to then return 0 end
+  from = math.max(-1000000000, math.min(1000000000, math.floor(from)))
+  to = math.max(-1000000000, math.min(1000000000, math.floor(to)))
   if from > to then from, to = to, from end
   return math.random(from, to)
 end`);
@@ -866,14 +979,16 @@ end`);
   };
 
   // A My block that uses itself (or goes round through other My blocks) would never stop and crash the mod.
-  // Calls to such blocks go through td_call, which stops 100 levels deep.
+  // Calls to such blocks go through td_call, which stops 100 levels deep, or after 1000 calls in one frame
+  // (a block that uses itself twice would otherwise make 2^100 calls and freeze the game).
   let loopingBlocks = new Set();
   const callGuardFn = () => {
     needs.add("calls");
     return helper("td_call", `
 function FN(myBlock, ...)
-  if td_depth >= 100 then return 0 end
+  if td_depth >= 100 or td_calls >= 1000 then return 0 end
   td_depth = td_depth + 1
+  td_calls = td_calls + 1
   local result = myBlock(...)
   td_depth = td_depth - 1
   return result
@@ -882,7 +997,10 @@ end`);
   const callMyBlock = L.forBlock.procedures_callreturn;
   L.forBlock.procedures_callreturn = (b, generator) => {
     const [code, order] = callMyBlock(b, generator);
-    if (!loopingBlocks.has(b.getFieldValue("NAME"))) return [code, order];
+    if (!loopingBlocks.has(b.getFieldValue("NAME"))) {
+      // The brackets turn "no value" into nil, which the blocks around it can handle.
+      return b.type === "procedures_callreturn" ? [`(${code})`, O.ATOMIC] : [code, order];
+    }
     const open = code.indexOf("(");
     const args = code.slice(open + 1, -1);
     return [`${callGuardFn()}(${code.slice(0, open)}${args ? ", " + args : ""})`, O.HIGH];
@@ -919,7 +1037,7 @@ end`);
 
   // The id includes the mod's name, so two mods that both have a "Boom Stick" don't share one tool in the game.
   function toolId(name, used, modName) {
-    const mod = plainId(modName).slice(0, 16);
+    const mod = window.Modpack.modCode(modName);
     let base = "tmm" + (mod ? mod + "_" : "") + (plainId(name).slice(0, 20) || "tool");
     let id = base;
     for (let n = 2; used.has(id); n++) id = base + n;
@@ -991,7 +1109,7 @@ end`);
         case "td_while_every": {
           // Runs straight away when the condition turns true, then every N seconds while it stays true.
           const seconds = Math.max(0.1, Number(block.getFieldValue("SECONDS")) || 1);
-          const condition = L.valueToCode(block, "COND", O.NONE) || "false";
+          const condition = boolIn(block, "COND", O.NONE) || "false";
           const timer = `td_every[${++everyCount}]`;
           state.push(`${timer} = 0`);
           tick.push(
@@ -1039,6 +1157,7 @@ end`);
         ? "  td_frame = math.min(td_frame + dt, 0.1)\n" +
           "  while td_frame > 0.0166 do\n" +
           "    td_frame = td_frame - 1 / 60\n" +
+          "    local dt = 1 / 60\n" +
           (needs.has("aim") ? "    td_aim = nil\n" : "") +
           `${indent(frameBody)}  end\n`
         : "";
@@ -1048,6 +1167,7 @@ end`);
     // Things that have to happen every frame for some blocks to work.
     const everyFrame = [];
     if (needs.has("aim")) everyFrame.push("  td_aim = nil\n");
+    if (needs.has("calls")) everyFrame.push("  td_calls = 0\n");
     if (start.some(Boolean)) {
       // "When the game starts" runs in the first frame, when the player is already in the level.
       state.push("td_started = false");
@@ -1112,7 +1232,7 @@ end`);
       state.push(`${L.getVariableName(variable.getId())} = 0`);
     }
     if (needs.has("sounds")) state.push("td_sounds = {}");
-    if (needs.has("calls")) state.push("td_depth = 0");
+    if (needs.has("calls")) state.push("td_depth = 0\ntd_calls = 0");
     if (needs.has("screen")) state.push("td_screen = {}");
     if (needs.has("messages")) state.push("td_messages = {}");
     const showsText = needs.has("screen") || needs.has("messages");
@@ -1123,8 +1243,8 @@ end`);
     const parts = ["-- Made with Teardown Mod Maker"];
     if (unused) parts.push(`-- ${B.unused_comment}`);
     if (state.length) parts.push(state.join("\n"));
-    if (helpers) parts.push(helpers);
     if (top.length) parts.push(top.join("\n\n"));
+    if (helpers) parts.push(helpers);
     // A mod made only of Lua code may have its own init and tick, so empty ones aren't added then.
     const initCode = init.join("");
     const tickCode = everyFrame.join("") + tick.join("") + afterEvents.join("");
@@ -1207,6 +1327,13 @@ end`);
 
   // Lua typed by the kid: a warning on the block when it has a mistake, so the mod doesn't break in the game.
   // window.luaparse is static/js/vendor/luaparse.js; without it there are just no warnings.
+  // "function tick(dt)", "function tick (dt)" and "tick = function(dt)" all define tick.
+  const CALLBACK_DEFINITIONS = {
+    init: /^\s*(?:function\s+init\s*\(|init\s*=\s*function\b)/gm,
+    tick: /^\s*(?:function\s+tick\s*\(|tick\s*=\s*function\b)/gm,
+    draw: /^\s*(?:function\s+draw\s*\(|draw\s*=\s*function\b)/gm,
+    update: /^\s*(?:function\s+update\s*\(|update\s*=\s*function\b)/gm,
+  };
   window.warnLuaCode = (workspace) => {
     const parse = window.luaparse && window.luaparse.parse;
     let lua = null;
@@ -1216,17 +1343,20 @@ end`);
       let warning = null;
       if (parse) {
         try {
-          parse(b.type === "td_lua_value" ? `return (${code.trim() || "nil"})` : code, { luaVersion: "5.1" });
+          const tree = parse(b.type === "td_lua_value" ? `return (${code.trim() || "nil"})` : code, { luaVersion: "5.1" });
+          const last = tree.body[tree.body.length - 1];
+          if (b.type === "td_lua_top" && last && last.type === "ReturnStatement") warning = B.lua_top_return;
         } catch (error) {
           warning = B.lua_mistake.replace("%1", error.message);
         }
       }
       if (!warning && b.type === "td_lua_top") {
         // Teardown runs init, tick and draw for the other blocks too, and a mod can only have one of each.
-        const names = [...code.matchAll(/^\s*function\s+(init|tick|draw|update)\s*\(/gm)].map((m) => m[1]);
+        const defines = (text, name) => (text.match(CALLBACK_DEFINITIONS[name]) || []).length;
+        const names = ["init", "tick", "draw", "update"].filter((name) => defines(code, name));
         if (names.length) {
           lua = lua ?? window.buildLua(workspace);
-          const clash = names.filter((name) => lua.split(`\nfunction ${name}(`).length > 2);
+          const clash = names.filter((name) => defines(lua, name) > defines(code, name));
           if (clash.length) warning = B.lua_clash.replace("%1", clash.join(", "));
         }
       }

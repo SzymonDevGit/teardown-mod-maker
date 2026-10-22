@@ -7,11 +7,27 @@
 
   class ModError extends Error {}
 
-  /** Turn "Boom Stick!" into "boom_stick" for the folder name. */
+  /** A short code made from any text, so names with no Latin letters still differ. */
+  function hashCode(text) {
+    let hash = 5381;
+    for (const char of String(text)) hash = (Math.imul(hash, 33) + char.codePointAt(0)) >>> 0;
+    return hash.toString(36);
+  }
+
+  /** Turn "Boom Stick!" into "boom_stick" for the folder name. "Мой мод" becomes "mod_" and a code. */
   function slugify(text, fallback = "my_mod") {
     const slug = String(text || "").toLowerCase().replace(/ł/g, "l").normalize("NFKD")
-      .replace(/[^\x00-\x7f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-    return slug.slice(0, 40) || fallback;
+      .replace(/[^\x00-\x7f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+    if (!slug) return /[\p{L}\p{N}]/u.test(String(text || "")) ? `mod_${hashCode(text)}` : fallback;
+    // Windows can't make a folder called con, aux, nul, prn, com1 or lpt1.
+    return /^(con|prn|aux|nul|com\d|lpt\d)$/.test(slug) ? `${slug}_mod` : slug;
+  }
+
+  /** The mod's part of its tool ids: up to 16 letters, plus a code when the name is longer or not Latin. */
+  function modCode(text) {
+    if (!/[\p{L}\p{N}]/u.test(String(text || ""))) return "";
+    const plain = slugify(text, "").replace(/^mod_/, "").replace(/_/g, "");
+    return plain.length <= 16 && /^[a-z]/.test(slugify(text, "")) ? plain : plain.slice(0, 10) + hashCode(text).slice(0, 6);
   }
 
   /** info.txt is one "key = value" per line, so values must stay on one line. */
@@ -136,7 +152,7 @@
     return { folder, bytes: makeZip(files) };
   }
 
-  const api = { ModError, slugify, cleanLine, buildModZip, crc32 };
+  const api = { ModError, slugify, modCode, cleanLine, buildModZip, crc32 };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Modpack = api;
 })(typeof window !== "undefined" ? window : globalThis);
