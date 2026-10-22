@@ -7,12 +7,21 @@
   const BLOCK_FONT = "'Barlow Condensed', 'Arial Narrow', sans-serif";
   const BLOCK_FONT_SAMPLE = "600 16px 'Barlow Condensed'";
   const fontReady = !document.fonts || document.fonts.check(BLOCK_FONT_SAMPLE);
+  const START_SCALE = 1.1;
+
+  // Keeps the blocks in the side panel the same size when you zoom the workspace in or out.
+  class FixedSizeFlyout extends Blockly.VerticalFlyout {
+    getFlyoutScale() {
+      return START_SCALE;
+    }
+  }
 
   const workspace = Blockly.inject("workspace", {
     toolbox: window.TOOLBOX,
+    plugins: { flyoutsVerticalToolbox: FixedSizeFlyout },
     media: window.APP.blocklyMedia,
     trashcan: true,
-    zoom: { controls: true, wheel: true, startScale: 1.1 },
+    zoom: { controls: true, wheel: true, startScale: START_SCALE },
     move: { scrollbars: true, drag: true, wheel: false },
     grid: { spacing: 24, length: 24, colour: "#262019", snap: true },
     theme: Blockly.Theme.defineTheme("tmm-scrapyard", {
