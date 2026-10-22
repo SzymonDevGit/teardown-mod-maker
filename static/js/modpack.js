@@ -110,8 +110,9 @@
   /**
    * Return { folder, bytes }. The zip holds one folder ready for Teardown's mods folder.
    * defaultVox is the stock tool model (static/vox/tool.vox); it's only added when the mod has a tool.
+   * extraFiles are more .vox models to put in the mod folder, each { path, data }.
    */
-  function buildModZip({ name, author, description, lua, vox = null, hasTool = true, defaultVox = null }) {
+  function buildModZip({ name, author, description, lua, vox = null, hasTool = true, defaultVox = null, extraFiles = [] }) {
     if (typeof lua !== "string" || !lua.trim()) throw new ModError("empty_mod");
     if (encoder.encode(lua).length > MAX_LUA_BYTES) throw new ModError("too_big");
     if (vox) {
@@ -126,6 +127,12 @@
       { name: `${folder}/main.lua`, data: lua },
     ];
     if (hasTool) files.push({ name: `${folder}/vox/tool.vox`, data: vox || defaultVox });
+    // More models, such as the things "shoot a ..." blocks shoot: [{ path: "vox/ball.vox", data }].
+    for (const file of extraFiles) {
+      if (file.data.length > MAX_VOX_BYTES) throw new ModError("vox_too_big");
+      if (String.fromCharCode(...file.data.slice(0, 4)) !== "VOX ") throw new ModError("not_vox");
+      files.push({ name: `${folder}/${file.path}`, data: file.data });
+    }
     return { folder, bytes: makeZip(files) };
   }
 

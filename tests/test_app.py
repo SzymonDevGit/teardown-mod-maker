@@ -12,7 +12,7 @@ import pytest
 
 from app import TRANSLATIONS, app
 from build_static import build
-from modpack import VOX_PATH, build_default_vox
+from modpack import SHOOT_DIR, VOX_PATH, build_default_vox, build_shoot_models
 
 LUA = 'function init()\nend\n\nfunction tick(dt)\nend\n'
 
@@ -77,6 +77,7 @@ def run_modpack_js(**options):
 const M = require(process.argv[1]);
 const o = JSON.parse(require("fs").readFileSync(0, "utf8"));
 for (const k of ["vox", "defaultVox"]) if (o[k]) o[k] = Uint8Array.from(Buffer.from(o[k], "base64"));
+for (const f of o.extraFiles || []) f.data = Uint8Array.from(Buffer.from(f.data, "base64"));
 try {
   process.stdout.write(JSON.stringify({ zip: Buffer.from(M.buildModZip(o).bytes).toString("base64") }));
 } catch (e) {
@@ -86,6 +87,8 @@ try {
     for key in ("vox", "defaultVox"):
         if options.get(key) is not None:
             options[key] = base64.b64encode(options[key]).decode()
+    for file in options.get("extraFiles", []):
+        file["data"] = base64.b64encode(file["data"]).decode()
     result = subprocess.run([NODE, "-e", script, str(MODPACK_JS)], input=json.dumps(options),
                             capture_output=True, text=True, check=True)
     out = json.loads(result.stdout)
@@ -238,3 +241,29 @@ def test_tutorial_popup_needs_a_video(client, monkeypatch):
     page = client.get("/").get_data(as_text=True)
     assert 'id="tutorial-dialog"' in page
     assert "youtube-nocookie.com/embed/abc123XYZ_-" in page
+
+
+def test_shoot_model_files_match_the_models():
+    # static/vox/shoot/*.vox are what the browser puts in the zip. Run `python modpack.py` after changing them.
+    models = build_shoot_models()
+    assert sorted(models) == ["ball", "barrel", "brick", "crate", "wrecking_ball"]
+    for name, vox in models.items():
+        assert (SHOOT_DIR / f"{name}.vox").read_bytes() == vox
+        start = vox.index(b"XYZI") + 12
+        count = struct.unpack_from("<i", vox, start)[0]
+        # Palette indices 1-8 are glass in Teardown.
+        assert count and min(vox[start + 4 + i * 4 + 3] for i in range(count)) > 8, name
+
+
+def test_shoot_block_offers_every_model():
+    things = re.findall(r'\[B\.thing_\w+, "(\w+)"\]', BLOCKS_JS)
+    assert sorted(things) == sorted(list(build_shoot_models()) + ["my_model"])
+
+
+def test_zip_adds_shoot_models():
+    ball = build_shoot_models()["ball"]
+    data, _ = run_modpack_js(name="Ball", lua=LUA, hasTool=False, extraFiles=[{"path": "vox/ball.vox", "data": ball}])
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        assert zf.read("ball/vox/ball.vox") == ball
+    _, error = run_modpack_js(name="Ball", lua=LUA, hasTool=False, extraFiles=[{"path": "vox/x.vox", "data": b"nope"}])
+    assert error == "not_vox"

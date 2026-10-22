@@ -83,6 +83,10 @@
         <input type="file" id="mod-vox" accept=".vox">
         <small class="muted">{{ t.app.vox_hint }}</small>
       </label>
+      <label>{{ t.app.shoot_vox }}
+        <input type="file" id="mod-shoot-vox" accept=".vox">
+        <small class="muted">{{ t.app.shoot_vox_hint }}</small>
+      </label>
       <p id="download-error" class="error" role="alert" hidden></p>
       <div class="install">
         <strong>{{ t.app.install_title }}</strong>
@@ -112,6 +116,18 @@
   </dialog>
   {% endif %}
 
+  <dialog id="lua-dialog" class="lua-dialog">
+    <form method="dialog">
+      <h2>{{ t.app.lua_title }}</h2>
+      <p class="muted">{{ t.app.lua_hint }}</p>
+      <textarea id="lua-code" rows="14" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+      <div class="dialog-buttons">
+        <button type="button" id="lua-cancel" class="btn">{{ t.app.cancel }}</button>
+        <button type="submit" value="done" class="btn btn-primary">{{ t.app.lua_done }}</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="help-layer" class="help-layer" hidden>
     <div class="help-title">{{ t.app.help_title }}</div>
     <div class="help-glossary" id="help-glossary"></div>
@@ -123,6 +139,7 @@
       t: {{ t|tojson }},
       pages: {{ pages|tojson }},
       defaultVox: {{ url_for('static', filename='vox/tool.vox')|tojson }},
+      shootVox: {{ url_for('static', filename='vox/shoot/')|tojson }},
       blocklyMedia: "https://unpkg.com/blockly@{{ blockly_version }}/media/"
     };
   </script>
@@ -131,6 +148,7 @@
   <script src="https://unpkg.com/blockly@{{ blockly_version }}/lua_compressed.js"></script>
   <script src="https://unpkg.com/blockly@{{ blockly_version }}/msg/{{ lang }}.js"></script>
   <script src="{{ url_for('static', filename='js/modpack.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/luaparse.js') }}"></script>
   <script src="{{ url_for('static', filename='js/blocks.js') }}"></script>
   <script src="{{ url_for('static', filename='js/help.js') }}"></script>
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
