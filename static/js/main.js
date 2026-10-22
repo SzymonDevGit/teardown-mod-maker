@@ -112,6 +112,7 @@
     $("mod-name").value = info.name || T.mod_name_default;
     $("mod-author").value = info.author || "";
     $("mod-description").value = info.description || "";
+    workspace.clearUndo();
   }
 
   function startFresh() {
@@ -120,6 +121,7 @@
     $("mod-name").value = T.mod_name_default;
     $("mod-author").value = "";
     $("mod-description").value = "";
+    workspace.clearUndo();
   }
 
   try {
@@ -211,6 +213,40 @@
       alert(T.open_failed);
     }
   });
+
+  // ---- Examples: ready-made mods to open and change ----
+
+  const examplesDialog = $("examples-dialog");
+  for (const example of window.EXAMPLES || []) {
+    const words = window.APP.t.examples[example.id];
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "example";
+    const name = document.createElement("strong");
+    name.textContent = words.name;
+    const stars = document.createElement("span");
+    stars.className = "stars";
+    stars.setAttribute("aria-label", `${example.stars}/5`);
+    stars.innerHTML = "★".repeat(example.stars) + `<span class="off">${"★".repeat(5 - example.stars)}</span>`;
+    const desc = document.createElement("small");
+    desc.textContent = words.desc;
+    button.append(name, stars, desc);
+    button.addEventListener("click", () => {
+      if (!confirm(T.examples_confirm)) return;
+      // The example has no author, so keep the name the player already typed.
+      const author = $("mod-author").value;
+      loadProject(example.project());
+      $("mod-author").value = author;
+      window.arrangeExample(workspace);
+      workspace.clearUndo();
+      writeStorage(currentProject());
+      examplesDialog.close();
+      // Start at the top left, where the example's first block is.
+      workspace.scroll(0, 0);
+    });
+    $("examples-list").append(button);
+  }
+  $("btn-examples").addEventListener("click", () => examplesDialog.showModal());
 
   // ---- Language ----
 

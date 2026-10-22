@@ -267,3 +267,36 @@ def test_zip_adds_shoot_models():
         assert zf.read("ball/vox/ball.vox") == ball
     _, error = run_modpack_js(name="Ball", lua=LUA, hasTool=False, extraFiles=[{"path": "vox/x.vox", "data": b"nope"}])
     assert error == "not_vox"
+
+
+EXAMPLES_JS = Path(__file__).resolve().parent.parent / "static" / "js" / "examples.js"
+STANDARD_BLOCKS = {"controls_if", "controls_repeat_ext", "logic_compare", "math_number", "math_change", "text",
+                   "text_join", "variables_get", "variables_set", "procedures_defnoreturn", "procedures_callnoreturn"}
+
+
+@pytest.mark.parametrize("lang", ["en", "pl"])
+def test_examples_use_real_blocks_and_text(lang):
+    if not NODE:
+        pytest.skip("Node.js is not installed")
+    # Runs examples.js with the page's words, and fails on any word the translations are missing.
+    script = """
+global.window = { APP: { t: JSON.parse(require("fs").readFileSync(0, "utf8")) } };
+require(process.argv[1]);
+const check = (value, path) => {
+  if (value === undefined) throw new Error("missing text at " + path);
+  if (value && typeof value === "object") for (const [k, v] of Object.entries(value)) check(v, path + "." + k);
+};
+const out = window.EXAMPLES.map((e) => { const p = e.project(); check(p, e.id); return { id: e.id, stars: e.stars, project: p }; });
+process.stdout.write(JSON.stringify(out));
+"""
+    result = subprocess.run([NODE, "-e", script, str(EXAMPLES_JS)], input=json.dumps(TRANSLATIONS[lang]),
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    examples = json.loads(result.stdout)
+    assert [e["stars"] for e in examples] == [1, 2, 3, 4, 5]
+    assert {e["id"] for e in examples} == set(TRANSLATIONS[lang]["examples"])
+    types = set(re.findall(r'"type": "(\w+)"', json.dumps([e["project"] for e in examples])))
+    assert types - defined_blocks() - STANDARD_BLOCKS == set()
+    for e in examples:
+        assert e["project"]["format"] == "teardown-mod-maker"
+        assert e["project"]["info"]["name"] == TRANSLATIONS[lang]["examples"][e["id"]]["name"]

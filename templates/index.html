@@ -30,6 +30,7 @@
     <nav class="actions">
       <button id="btn-new" class="btn" data-term="new">{{ t.app.new }}</button>
       <button id="btn-open" class="btn" data-term="open">{{ t.app.open }}</button>
+      <button id="btn-examples" class="btn" data-term="examples">{{ t.app.examples }}</button>
       <button id="btn-save" class="btn" data-term="save">{{ t.app.save }}</button>
       <button id="btn-code" class="btn" data-term="show_code">{{ t.app.show_code }}</button>
       {% if tutorial_video_id %}
@@ -116,6 +117,17 @@
   </dialog>
   {% endif %}
 
+  <dialog id="examples-dialog" class="examples-dialog" aria-labelledby="examples-title" aria-describedby="examples-hint">
+    <form method="dialog">
+      <h2 id="examples-title">{{ t.app.examples_title }}</h2>
+      <p id="examples-hint" class="muted">{{ t.app.examples_hint }}</p>
+      <div id="examples-list" class="examples-list"></div>
+      <div class="dialog-buttons">
+        <button type="submit" class="btn">{{ t.app.cancel }}</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="lua-dialog" class="lua-dialog">
     <form method="dialog">
       <h2>{{ t.app.lua_title }}</h2>
@@ -150,6 +162,7 @@
   <script src="{{ url_for('static', filename='js/modpack.js') }}"></script>
   <script src="{{ url_for('static', filename='js/vendor/luaparse.js') }}"></script>
   <script src="{{ url_for('static', filename='js/blocks.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/examples.js') }}"></script>
   <script src="{{ url_for('static', filename='js/help.js') }}"></script>
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

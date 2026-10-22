@@ -44,7 +44,11 @@
     "lua_hint": "Pisz Lua dla Teardown. Działają tu twoje zmienne, Moje klocki i funkcje Teardown.",
     "lua_done": "Gotowe",
     "shoot_vox": "Model do strzelania (plik .vox, opcjonalnie)",
-    "shoot_vox_hint": "Używany przez klocki strzelania ustawione na \"mój model\"."
+    "shoot_vox_hint": "Używany przez klocki strzelania ustawione na \"mój model\".",
+    "examples": "Przykłady",
+    "examples_title": "Przykładowe mody",
+    "examples_hint": "Otwórz jeden, wypróbuj go w Teardown, zobacz, jak działa, i go zmień. Więcej gwiazdek znaczy, że robi więcej.",
+    "examples_confirm": "Otworzyć ten przykład? Zastąpi klocki, które masz teraz, więc najpierw je zapisz, jeśli chcesz je zachować."
   },
   "categories": {
     "events": "Zdarzenia",
@@ -194,9 +198,9 @@
     "force_push": "odepchnij",
     "throw_held": "rzuć to, co trzymam, z siłą %1",
     "freeze": "%1",
-    "freeze_freeze": "zamroź to, na co patrzę",
-    "freeze_unfreeze": "odmroź to, na co patrzę",
-    "freeze_all": "odmroź wszystko",
+    "freeze_freeze": "zamróź to, na co patrzę",
+    "freeze_unfreeze": "odmróź to, na co patrzę",
+    "freeze_all": "odmróź wszystko",
     "weather": "ustaw pogodę: %1",
     "weather_day": "dzień",
     "weather_sunset": "zachód słońca",
@@ -311,11 +315,73 @@
     "last_shot": { "name": "Mój ostatni strzał", "desc": "Gdzie teraz jest ostatnia wystrzelona rzecz. Jeśli jej nie ma, to miejsce, na które patrzysz." },
     "force": { "name": "Czarna dziura albo fala uderzeniowa", "desc": "Przyciąga albo odpycha wszystko, co może się ruszać, blisko jakiegoś miejsca." },
     "throw_held": { "name": "Rzut", "desc": "Rzuca to, co trzymasz, tam, gdzie patrzysz. Najpierw podnieś coś klawiszem chwytania z gry." },
-    "freeze": { "name": "Zamrażanie", "desc": "Zamrożona rzecz zatrzymuje się i wisi w powietrzu. Odmroź ją, żeby znowu spadła." },
+    "freeze": { "name": "Zamrażanie", "desc": "Zamrożona rzecz zatrzymuje się i wisi w powietrzu. Odmróź ją, żeby znowu spadła." },
     "weather": { "name": "Pogoda", "desc": "Zmienia niebo i światło: dzień, zachód słońca, noc, mgła albo śnieg. Dzień przywraca normalny wygląd gry." },
     "lua_code": { "name": "Kod Lua", "desc": "Prawdziwy Lua, język, w którym pisze się mody do Teardown. Kliknij kod, żeby go zmienić. Znak ostrzeżenia oznacza błąd." },
     "lua_value": { "name": "Wartość Lua", "desc": "Kawałek Lua, który daje wartość, na przykład GetTime() albo 2 * 3." },
     "lua_top": { "name": "Lua na początku", "desc": "Lua, który trafia na początek main.lua, na twoje własne funkcje i zmienne." },
-    "code": { "name": "Kod", "desc": "Klocki, w których piszesz prawdziwy kod Lua." }
+    "code": { "name": "Kod", "desc": "Klocki, w których piszesz prawdziwy kod Lua." },
+    "examples": { "name": "Przykłady", "desc": "Gotowe mody, od prostej broni po małą grę. Otwórz jeden, zobacz, jak działa, i go zmień." }
+  },
+  "examples": {
+    "pop_gun": {
+      "name": "Pukawka",
+      "desc": "Najprostsza broń: kliknij, żeby z hukiem wystrzelić pocisk. Jedno narzędzie i trzy klocki. Zacznij tutaj!",
+      "mod_desc": "Prosta broń, która z hukiem strzela pociskami.",
+      "tool": "Pukawka"
+    },
+    "rocket_launcher": {
+      "name": "Wyrzutnia rakiet",
+      "desc": "Strzela 4 rakietami, a potem klawisz R ją przeładowuje. Uczy zmiennych, klocka „jeśli / w przeciwnym razie” i odliczania czasu.",
+      "mod_desc": "Wyrzutnia z 4 rakietami. Gdy jest pusta, naciśnij R, żeby ją przeładować.",
+      "tool": "Wyrzutnia rakiet",
+      "var_rockets": "rakiety",
+      "ammo_text": "Rakiety: ",
+      "empty": "Brak rakiet! Naciśnij R, żeby przeładować.",
+      "reloading": "Przeładowanie..."
+    },
+    "crate_cannon": {
+      "name": "Armata na skrzynie",
+      "desc": "Strzela skrzyniami, beczkami albo kulami burzącymi. Q zmienia amunicję, B wysadza ostatni strzał. Uczy „w przeciwnym razie, jeśli” i pierwszego Mojego klocka.",
+      "mod_desc": "Strzela skrzyniami, beczkami albo kulami burzącymi. Q zmienia amunicję, B wysadza ostatni strzał.",
+      "tool": "Armata na skrzynie",
+      "var_ammo": "amunicja",
+      "my_block": "pokaż amunicję",
+      "ammo_crates": "Amunicja: skrzynie  [Q] zmień  [B] wysadź",
+      "ammo_barrels": "Amunicja: beczki  [Q] zmień  [B] wysadź",
+      "ammo_balls": "Amunicja: kule burzące  [Q] zmień  [B] wysadź"
+    },
+    "superhero": {
+      "name": "Zestaw superbohatera",
+      "desc": "Laserowy wzrok, latanie, fala uderzeniowa, zamrażanie i przybliżenie, a do tego nic cię nie rani i skaczesz bardzo wysoko. Zmienne pamiętają, które moce są włączone. Weź Laserowy wzrok, żeby zobaczyć klawisze.",
+      "mod_desc": "Laserowy wzrok, latanie, fala uderzeniowa, zamrażanie i przybliżenie. Nic cię nie rani i skaczesz bardzo wysoko. Weź Laserowy wzrok, żeby zobaczyć klawisze.",
+      "tool": "Laserowy wzrok",
+      "var_flying": "latanie",
+      "var_zoomed": "przybliżenie",
+      "keys_text": "[G] lot  [V] fala  [C] zamróź  [X] odmróź  [Z] przybliż",
+      "fly_on": "Latanie: włączone",
+      "fly_off": "Latanie: wyłączone"
+    },
+    "storm_survival": {
+      "name": "Przetrwaj burzę",
+      "desc": "Minigra: naciśnij N i przetrwaj 60 sekund piorunów, które są coraz groźniejsze. Uczy odliczania, powtarzania, Moich klocków i prawdziwego kodu Lua.",
+      "mod_desc": "Naciśnij N i przetrwaj 60 sekund piorunów, które są coraz groźniejsze.",
+      "var_playing": "gra trwa",
+      "var_time": "pozostały czas",
+      "var_level": "siła burzy",
+      "press_n": "Naciśnij N, żeby zacząć burzę!",
+      "survive": "Przetrwaj burzę!",
+      "time_text": "Pozostały czas: ",
+      "level_text": "   Siła burzy: ",
+      "won": "Udało się! ",
+      "lost": "Burza cię dopadła!",
+      "play_again": "Naciśnij N, żeby zagrać jeszcze raz.",
+      "worse": "burza się nasila",
+      "strike": "piorun obok mnie",
+      "end": "koniec burzy",
+      "worse_text": "Burza się nasila!",
+      "lua_top": "-- Prawdziwy kod Lua: wybiera tytuł zależnie od tego, ile zdrowia ci zostało.\n-- GetPlayerHealth() daje liczbę od 0 do 1 (1 to pełne zdrowie), a nie od 0 do 100 jak klocek „moje zdrowie”.\nfunction tytul_burzy()\n  local zdrowie = GetPlayerHealth()\n  if zdrowie > 0.8 then return \"Ani draśnięcia!\" end\n  if zdrowie > 0.4 then return \"Wciąż na nogach!\" end\n  return \"Było o włos!\"\nend",
+      "lua_value": "tytul_burzy()"
+    }
   }
 }

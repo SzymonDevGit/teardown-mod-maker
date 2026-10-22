@@ -8,6 +8,7 @@ A website where you snap blocks together to make mods for [Teardown](https://tea
 - **See the real code.** Press "Show code" to see the Lua that your blocks write.
 - **Download and play.** "Download mod" gives you a zip to drop into Teardown's mods folder.
 - **No accounts.** Your blocks save in your browser automatically. "Save" and "Open" let you keep them in a file.
+- **Examples to learn from.** "Examples" opens five ready-made mods, from a one-click Pop Gun (★) to a Storm Survival mini game (★★★★★), in English or Polish.
 
 ## The blocks
 
@@ -101,6 +102,7 @@ Tip: use the **show message** block to check your blocks run. The message appear
 | `modpack.py` | Makes the default tool model, `static/vox/tool.vox`, and the shoot models in `static/vox/shoot/`. Run `python modpack.py` after changing it. |
 | `static/js/blocks.js` | Every Teardown block, and the Lua code each one writes. |
 | `static/js/help.js` | The hold-T help labels. |
+| `static/js/examples.js` | The five example mods behind the Examples button. Their words are in the `examples` part of the translations. |
 | `static/js/main.js` | Buttons, saving, opening, and downloading. |
 | `static/js/vendor/luaparse.js` | Checks Lua code blocks for mistakes ([luaparse](https://github.com/fstirlitz/luaparse), MIT). |
 | `translations/en.json`, `pl.json` | All the text in both languages, including the help descriptions. |

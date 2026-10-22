@@ -357,7 +357,8 @@ end`);
   const randomNearFn = () => helper("td_randomNear", `
 function FN(metres, pos)
   local angle = math.random() * math.pi * 2
-  local dist = math.random() * metres
+  -- The square root spreads spots evenly over the circle, instead of bunching them in the middle.
+  local dist = math.sqrt(math.random()) * metres
   return VecAdd(pos, Vec(math.cos(angle) * dist, 0, math.sin(angle) * dist))
 end`);
 
