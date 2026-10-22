@@ -23,6 +23,7 @@
     screen: "#6b4fa0",
     objects: "#8a5a2b",
     effects: "#1f8a8a",
+    code: "#3f4d63",
   };
 
   // No number keys: Teardown uses them to switch tools, so the kid's tool would be put away.
@@ -61,6 +62,41 @@
     return { type, message0: message, args0: args, output, colour, inputsInline: true };
   }
 
+  // Many lines of real Lua. Clicking the code on the block opens a big text box (window.editLuaCode in main.js).
+  class FieldCode extends Blockly.Field {
+    constructor(value) {
+      super(value ?? "");
+      this.SERIALIZABLE = true;
+    }
+
+    static fromJson(options) {
+      return new this(options.value);
+    }
+
+    doClassValidation_(value) {
+      return typeof value === "string" ? value : null;
+    }
+
+    // The block shows the first line, and how many more lines there are.
+    getText_() {
+      const lines = String(this.getValue() || "").split("\n").filter((line) => line.trim());
+      if (!lines.length) return B.lua_empty;
+      const first = lines[0].trim();
+      const short = first.length > 30 ? first.slice(0, 29) + "…" : first;
+      return lines.length > 1 ? `${short}  (+${lines.length - 1})` : short;
+    }
+
+    showEditor_() {
+      window.editLuaCode(this.getValue(), (code) => this.setValue(code));
+    }
+  }
+  Blockly.fieldRegistry.register("field_lua_code", FieldCode);
+
+  const THINGS = [
+    [B.thing_ball, "ball"], [B.thing_crate, "crate"], [B.thing_barrel, "barrel"], [B.thing_brick, "brick"],
+    [B.thing_wrecking_ball, "wrecking_ball"], [B.thing_my_model, "my_model"],
+  ];
+
   Blockly.common.defineBlocksWithJsonArray([
     // Events
     eventBlock("td_when_start", B.when_start),
@@ -69,6 +105,13 @@
     eventBlock("td_every_seconds", B.every_seconds, [
       { type: "field_number", name: "SECONDS", value: 1, min: 0.1, max: 3600, precision: 0.1 },
     ]),
+    {
+      ...eventBlock("td_while_every", B.while_every, [
+        { type: "input_value", name: "COND", check: "Boolean" },
+        { type: "field_number", name: "SECONDS", value: 1, min: 0.1, max: 3600, precision: 0.1 },
+      ]),
+      inputsInline: true,
+    },
     {
       type: "td_tool",
       message0: B.tool,
@@ -100,6 +143,11 @@
       ]),
     ]),
     actionBlock("td_message", COLOURS.actions, B.message, [{ type: "input_value", name: "TEXT" }]),
+    actionBlock("td_shoot_object", COLOURS.actions, B.shoot_object, [dropdown("THING", THINGS), number("SPEED")]),
+    actionBlock("td_laser", COLOURS.actions, B.laser, [
+      dropdown("COLOUR", Object.keys(LIGHT_COLOURS).map((key) => [B["colour_" + key], key])),
+    ]),
+    actionBlock("td_lightning", COLOURS.actions, B.lightning, [place("WHERE")]),
 
     // Player
     actionBlock("td_launch", COLOURS.player, B.launch, [number("POWER")]),
@@ -116,6 +164,15 @@
     valueBlock("td_speed", COLOURS.player, B.speed, "Number"),
     valueBlock("td_key_held", COLOURS.player, B.key_held, "Boolean", [dropdown("KEY", KEYS)]),
     valueBlock("td_on_ground", COLOURS.player, B.on_ground, "Boolean"),
+    actionBlock("td_power", COLOURS.player, B.power, [
+      dropdown("POWER", [[B.power_god, "god"], [B.power_fly, "fly"], [B.power_jump, "jump"], [B.power_speed, "speed"]]),
+      dropdown("ON", [[B.on, "on"], [B.off, "off"]]),
+    ]),
+    actionBlock("td_zoom", COLOURS.player, B.zoom, [number("ZOOM")]),
+    valueBlock("td_in_car", COLOURS.player, B.in_car, "Boolean"),
+    actionBlock("td_boost_car", COLOURS.player, B.boost_car, [
+      dropdown("DIR", [[B.dir_forward, "forward"], [B.dir_up, "up"]]), number("POWER"),
+    ]),
 
     // Places
     valueBlock("td_look_point", COLOURS.places, B.look_point, "Place"),
@@ -123,6 +180,7 @@
     valueBlock("td_in_front", COLOURS.places, B.in_front, "Place", [number("DIST")]),
     valueBlock("td_above", COLOURS.places, B.above, "Place", [number("DIST"), place("WHERE")]),
     valueBlock("td_random_near", COLOURS.places, B.random_near, "Place", [number("DIST"), place("WHERE")]),
+    valueBlock("td_last_shot", COLOURS.places, B.last_shot, "Place"),
 
     // Advanced: timers
     {
@@ -159,6 +217,13 @@
       dropdown("GRAVITY", [[B.gravity_normal, "normal"], [B.gravity_moon, "moon"], [B.gravity_heavy, "heavy"], [B.gravity_upside_down, "upside_down"]]),
     ]),
     valueBlock("td_looking_at_thing", COLOURS.objects, B.looking_at_thing, "Boolean"),
+    actionBlock("td_force", COLOURS.objects, B.force, [
+      dropdown("DIR", [[B.force_pull, "pull"], [B.force_push, "push"]]), number("DIST"), place("WHERE"), number("POWER"),
+    ]),
+    actionBlock("td_throw_held", COLOURS.objects, B.throw_held, [number("POWER")]),
+    actionBlock("td_freeze", COLOURS.objects, B.freeze, [
+      dropdown("DO", [[B.freeze_freeze, "freeze"], [B.freeze_unfreeze, "unfreeze"], [B.freeze_all, "all"]]),
+    ]),
 
     // Advanced: effects
     actionBlock("td_light", COLOURS.effects, B.light, [
@@ -169,6 +234,27 @@
       dropdown("KIND", [[B.particles_smoke, "smoke"], [B.particles_sparks, "sparks"]]), place("WHERE"),
     ]),
     actionBlock("td_rain", COLOURS.effects, B.rain, [dropdown("ON", [[B.rain_on, "on"], [B.rain_off, "off"]])]),
+    actionBlock("td_weather", COLOURS.effects, B.weather, [
+      dropdown("WEATHER", [[B.weather_day, "day"], [B.weather_sunset, "sunset"], [B.weather_night, "night"],
+        [B.weather_fog, "fog"], [B.weather_snow, "snow"]]),
+    ]),
+
+    // Advanced: code
+    {
+      type: "td_lua",
+      message0: B.lua,
+      args0: [{ type: "field_lua_code", name: "CODE", value: 'DebugPrint("Hello from Lua!")' }],
+      colour: COLOURS.code,
+      previousStatement: null,
+      nextStatement: null,
+    },
+    valueBlock("td_lua_value", COLOURS.code, B.lua_value, null, [{ type: "field_input", name: "CODE", text: "GetTime()" }]),
+    {
+      type: "td_lua_top",
+      message0: B.lua_top,
+      args0: [{ type: "field_lua_code", name: "CODE", value: "-- " + B.lua_top_default }],
+      colour: COLOURS.code,
+    },
   ]);
 
   // ---- Lua helpers, only added to the mod when a block needs them ----
@@ -177,14 +263,18 @@
   let needs = new Set();
 
   // Global names the helpers use, so a kid's variable can't clash with them.
-  L.addReservedWords("td_slowmo,td_timers,td_screen,td_messages,td_tools,td_lights,td_sounds,td_every,td_depth,td_aim,td_frame,td_started,td_colours,dt");
+  L.addReservedWords("td_slowmo,td_timers,td_screen,td_messages,td_tools,td_beams,td_powers,td_zoom,td_frozen,td_lastShot,td_lights,td_sounds,td_every,td_depth,td_aim,td_frame,td_started,td_colours,dt");
 
   // "My blocks" become Lua functions named by the kid. Make sure no name takes over a Teardown callback
   // (a My block called "update" would run by itself every frame) or a game function the mod calls
   // (a My block called "Explosion" that explodes would call itself forever). Blockly adds a number instead.
   const TEARDOWN_NAMES = [
     "init", "tick", "update", "draw", "handleCommand", "render", "postUpdate",
-    "ApplyBodyImpulse", "DebugPrint", "Delete", "Explosion", "GetBodyMass", "GetBool", "GetCameraTransform",
+    "ApplyBodyImpulse", "DebugPrint", "Delete", "DrawLine", "Explosion", "GetBodyCenterOfMass", "GetBodyMass",
+    "GetBodyTransform", "GetBodyVelocity", "GetBool", "GetCameraTransform", "GetEntityType", "GetPlayerGrabBody",
+    "GetToolBody", "GetVehicleBody", "GetVehicleTransform", "QueryAabbBodies", "QueryRejectBody", "ReleasePlayerGrab",
+    "SetBodyAngularVelocity", "SetBodyDynamic", "SetBodyVelocity", "SetCameraFov", "SetEnvironmentDefault",
+    "SetPlayerParam", "SetPlayerWalkingSpeed", "TransformToParentPoint", "VecSub",
     "GetPlayerHealth", "GetPlayerTransform", "GetPlayerVehicle", "GetPlayerVelocity", "GetPostProcessingProperty",
     "GetShapeBody", "GetString", "GetTime",
     "InputDown", "InputPressed", "IsBodyDynamic", "IsHandleValid", "IsPlayerGrounded", "LoadSound", "MakeHole", "Paint",
@@ -219,15 +309,17 @@ function FN()
     local vehicle = GetPlayerVehicle()
     if vehicle ~= 0 then QueryRejectVehicle(vehicle) end
     local hit, dist, normal, shape = QueryRaycast(cam.pos, dir, 100)
-    local body = 0
+    local body, any = 0, 0
     if hit then
-      body = GetShapeBody(shape)
+      any = GetShapeBody(shape)
+      body = any
       if body ~= 0 and not IsBodyDynamic(body) then body = 0 end
     else
       dist = 100
       normal = VecScale(dir, -1)
     end
-    td_aim = { point = VecAdd(cam.pos, VecScale(dir, dist)), normal = normal, body = body, dir = dir }
+    -- body is the moving object I'm looking at; any is whatever object it is, even one that can't move.
+    td_aim = { point = VecAdd(cam.pos, VecScale(dir, dist)), normal = normal, body = body, any = any, dir = dir }
   end
   return td_aim
 end`);
@@ -265,7 +357,8 @@ end`);
   const randomNearFn = () => helper("td_randomNear", `
 function FN(metres, pos)
   local angle = math.random() * math.pi * 2
-  local dist = math.random() * metres
+  -- The square root spreads spots evenly over the circle, instead of bunching them in the middle.
+  local dist = math.sqrt(math.random()) * metres
   return VecAdd(pos, Vec(math.cos(angle) * dist, 0, math.sin(angle) * dist))
 end`);
 
@@ -395,7 +488,7 @@ end`);
   const clamp = (code, min, max) => `math.max(${min}, math.min(${max}, ${code}))`;
 
   // Event blocks are put together by buildLua, so they write nothing themselves.
-  const EVENT_TYPES = new Set(["td_when_start", "td_every_frame", "td_when_key", "td_every_seconds", "td_tool"]);
+  const EVENT_TYPES = new Set(["td_when_start", "td_every_frame", "td_when_key", "td_every_seconds", "td_while_every", "td_tool"]);
   for (const type of EVENT_TYPES) L.forBlock[type] = () => "";
 
   // Actions
@@ -532,6 +625,188 @@ end`);
     return `SetEnvironmentProperty("rain", ${amount})\nSetEnvironmentProperty("wetness", ${amount})\n`;
   };
 
+  // The weather and time of day. Each one starts from the game's default look, so they don't pile up.
+  const WEATHER = {
+    day: "",
+    sunset: 'SetEnvironmentProperty("skyboxtint", 1, 0.55, 0.35)\nSetEnvironmentProperty("suncolortint", 1, 0.55, 0.3)\n' +
+      'SetEnvironmentProperty("fogcolor", 1, 0.6, 0.4)\n',
+    night: 'SetEnvironmentProperty("skyboxbrightness", 0.05)\nSetEnvironmentProperty("sunbrightness", 0)\n' +
+      'SetEnvironmentProperty("nightlight", true)\n',
+    fog: 'SetEnvironmentProperty("fogcolor", 0.75, 0.75, 0.8)\nSetEnvironmentProperty("fogparams", 2, 30, 0.95, 2)\n',
+    snow: 'SetEnvironmentProperty("snowamount", 0.7, 0.7)\nSetEnvironmentProperty("snowdir", 0, -1, 0, 0.3)\n' +
+      'SetEnvironmentProperty("fogcolor", 0.85, 0.85, 0.9)\n',
+  };
+  L.forBlock.td_weather = (b) => `SetEnvironmentDefault()\n${WEATHER[b.getFieldValue("WEATHER")] ?? ""}`;
+
+  // Things to shoot: the five models in static/vox/shoot/, or the kid's own .vox file (added to the zip by main.js).
+  const shootThingFn = () => {
+    needs.add("shots");
+    return helper("td_shootThing", `
+function FN(file, speed)
+  local cam = GetCameraTransform()
+  local dir = TransformToParentVec(cam, Vec(0, 0, -1))
+  -- Start up to 2 m ahead, but not inside a wall I'm standing next to. Look past my own tool and car.
+  local tool = GetToolBody()
+  if tool ~= 0 then QueryRejectBody(tool) end
+  local vehicle = GetPlayerVehicle()
+  if vehicle ~= 0 then QueryRejectVehicle(vehicle) end
+  local hit, dist = QueryRaycast(cam.pos, dir, 2.5)
+  local ahead = 2
+  if hit then ahead = math.max(0.5, dist - 0.6) end
+  local shot = Spawn("<vox file='" .. file .. "' prop='true'/>", Transform(VecAdd(cam.pos, VecScale(dir, ahead)), cam.rot))
+  for _, handle in ipairs(shot) do
+    if GetEntityType(handle) == "body" then
+      SetBodyVelocity(handle, VecScale(dir, speed))
+      td_lastShot = handle
+    end
+  end
+end`);
+  };
+  L.forBlock.td_shoot_object = (b) => {
+    const thing = THINGS.some(([, value]) => value === b.getFieldValue("THING")) ? b.getFieldValue("THING") : "ball";
+    return `${shootThingFn()}("MOD/vox/${thing}.vox", ${clamp(numberIn(b, "SPEED", "30"), 0, 200)})\n`;
+  };
+  // The middle of the last thing I shot, or where I'm looking if it's gone.
+  L.forBlock.td_last_shot = () => {
+    needs.add("shots");
+    return [`${helper("td_lastShotPlace", `
+function FN()
+  if td_lastShot ~= 0 and IsHandleValid(td_lastShot) then
+    return TransformToParentPoint(GetBodyTransform(td_lastShot), GetBodyCenterOfMass(td_lastShot))
+  end
+  return ${lookPointFn()}()
+end`)}()`, O.HIGH];
+  };
+
+  // Lines only show for one frame in Teardown, so beams are kept for a moment and drawn every frame in tick().
+  const laserFn = () => {
+    needs.add("beams");
+    const aim = aimFn();
+    return helper("td_laser", `
+function FN(r, g, b)
+  local point = ${aim}().point
+  local from = TransformToParentPoint(GetCameraTransform(), Vec(0.25, -0.25, -0.6))
+  MakeHole(point, 0.3, 0.2, 0.1)
+  if #td_beams > 40 then table.remove(td_beams, 1) end
+  table.insert(td_beams, { from = from, to = point, r = r, g = g, b = b, light = 2, time = GetTime() + 0.15 })
+end`);
+  };
+  L.forBlock.td_laser = (b) => {
+    const [r, g, bl] = LIGHT_COLOURS[b.getFieldValue("COLOUR")] || LIGHT_COLOURS.red;
+    return `${laserFn()}(${r}, ${g}, ${bl})\n`;
+  };
+  const lightningFn = () => {
+    needs.add("beams");
+    return helper("td_lightning", `
+function FN(pos)
+  -- A zig-zag line from 40 m up, a flash and a bang.
+  local from = VecAdd(pos, Vec(0, 40, 0))
+  for i = 1, 8 do
+    local to = VecAdd(pos, Vec((math.random() - 0.5) * 3, 40 * (1 - i / 8), (math.random() - 0.5) * 3))
+    if i == 8 then to = pos end
+    if #td_beams > 40 then table.remove(td_beams, 1) end
+    table.insert(td_beams, { from = from, to = to, r = 0.8, g = 0.85, b = 1, light = i == 8 and 15 or 0, time = GetTime() + 0.3 })
+    from = to
+  end
+  Explosion(pos, 1.5)
+end`);
+  };
+  L.forBlock.td_lightning = (b) => `${lightningFn()}(${where(b)})\n`;
+
+  // Player powers. Jump and walking speed have to be set again every frame, so tick() does that.
+  L.forBlock.td_power = (b) => {
+    needs.add("powers");
+    const power = ["god", "fly", "jump", "speed"].includes(b.getFieldValue("POWER")) ? b.getFieldValue("POWER") : "god";
+    const on = b.getFieldValue("ON") === "on";
+    const param = { god: "GodMode", fly: "FlyMode" }[power];
+    return `td_powers.${power} = ${on}\n` + (param ? `SetPlayerParam("${param}", ${on})\n` : "");
+  };
+  L.forBlock.td_zoom = (b) => {
+    needs.add("zoom");
+    return `td_zoom = ${clamp(numberIn(b, "ZOOM", "2"), 1, 8)}\n`;
+  };
+  L.forBlock.td_in_car = () => ["(GetPlayerVehicle() ~= 0)", O.ATOMIC];
+  // Does nothing when I'm not driving. A car's back is +z, so forward is -z.
+  L.forBlock.td_boost_car = (b) => {
+    const up = b.getFieldValue("DIR") === "up";
+    return `${helper("td_boostCar", `
+function FN(up, power)
+  local vehicle = GetPlayerVehicle()
+  if vehicle == 0 then return end
+  local body = GetVehicleBody(vehicle)
+  local dir = TransformToParentVec(GetVehicleTransform(vehicle), Vec(0, 0, -1))
+  if up then dir = Vec(0, 1, 0) end
+  SetBodyVelocity(body, VecAdd(GetBodyVelocity(body), VecScale(dir, power)))
+end`)}(${up}, ${clamp(numberIn(b, "POWER", "10"), -50, 50)})\n`;
+  };
+
+  // Black hole or blast wave: every object that can move near the spot, up to 100 of them.
+  L.forBlock.td_force = (b) => `${helper("td_force", `
+function FN(pull, radius, pos, power)
+  local size = Vec(radius, radius, radius)
+  local tool = GetToolBody()
+  local moved = 0
+  for _, body in ipairs(QueryAabbBodies(VecSub(pos, size), VecAdd(pos, size))) do
+    if moved >= 100 then break end
+    if body ~= tool and IsBodyDynamic(body) then
+      local middle = TransformToParentPoint(GetBodyTransform(body), GetBodyCenterOfMass(body))
+      local away = VecSub(middle, pos)
+      local dist = VecLength(away)
+      if dist < radius and dist > 0.1 then
+        if pull then away = VecScale(away, -1) end
+        ApplyBodyImpulse(body, middle, VecScale(away, power * GetBodyMass(body) / dist))
+        moved = moved + 1
+      end
+    end
+  end
+end`)}(${b.getFieldValue("DIR") === "pull"}, ${clamp(numberIn(b, "DIST", "10"), 0, 50)}, ${where(b)}, ${clamp(numberIn(b, "POWER", "10"), 0, 100)})\n`;
+
+  L.forBlock.td_throw_held = (b) => `${helper("td_throwHeld", `
+function FN(power)
+  local body = GetPlayerGrabBody()
+  if body ~= 0 then
+    ReleasePlayerGrab()
+    SetBodyVelocity(body, VecScale(TransformToParentVec(GetCameraTransform(), Vec(0, 0, -1)), power))
+  end
+end`)}(${clamp(numberIn(b, "POWER", "20"), 0, 100)})\n`;
+
+  // Freezing makes an object stay where it is, even in the air. Only things a mod froze can be unfrozen.
+  L.forBlock.td_freeze = (b) => {
+    needs.add("frozen");
+    const aim = aimFn();
+    return `${helper("td_freeze", `
+function FN(action)
+  if action == "all" then
+    for body in pairs(td_frozen) do
+      if IsHandleValid(body) then SetBodyDynamic(body, true) end
+    end
+    td_frozen = {}
+    return
+  end
+  local aim = ${aim}()
+  if action == "freeze" and aim.body ~= 0 and IsHandleValid(aim.body) then
+    SetBodyVelocity(aim.body, Vec(0, 0, 0))
+    SetBodyAngularVelocity(aim.body, Vec(0, 0, 0))
+    SetBodyDynamic(aim.body, false)
+    td_frozen[aim.body] = true
+  elseif action == "unfreeze" and td_frozen[aim.any] and IsHandleValid(aim.any) then
+    SetBodyDynamic(aim.any, true)
+    td_frozen[aim.any] = nil
+  end
+end`)}("${["freeze", "unfreeze", "all"].includes(b.getFieldValue("DO")) ? b.getFieldValue("DO") : "freeze"}")\n`;
+  };
+
+  // Code: the kid's own Lua goes into the mod exactly as typed.
+  L.forBlock.td_lua = (b) => {
+    const code = String(b.getFieldValue("CODE") || "").trim();
+    return code ? code + "\n" : "";
+  };
+  L.forBlock.td_lua_value = (b) => {
+    const code = String(b.getFieldValue("CODE") || "").trim();
+    return [code ? `(${code})` : "nil", O.ATOMIC];
+  };
+  L.forBlock.td_lua_top = () => "";
+
   // Kids often add to a score before setting it, and join numbers into text.
   // Blockly's Lua for these crashes on a variable that has no value yet, so make them forgiving.
   L.forBlock.math_change = (b) => {
@@ -653,6 +928,7 @@ end`);
     const frameBodies = [];
     const state = [];
     const toolIds = new Set();
+    const top = [];
     let everyCount = 0;
     let unused = 0;
 
@@ -661,6 +937,12 @@ end`);
       if (block.type.startsWith("procedures_def")) {
         // "My blocks": the Lua generator stores the function definition with the helpers.
         L.blockToCode(block);
+        continue;
+      }
+      if (block.type === "td_lua_top") {
+        // The kid's own functions and variables, at the top of main.lua.
+        const code = String(block.getFieldValue("CODE") || "").trim();
+        if (code) top.push(code);
         continue;
       }
       if (!EVENT_TYPES.has(block.type)) {
@@ -691,6 +973,23 @@ end`);
             `    ${timer} = ${timer} + ${seconds}\n` +
             `    if ${timer} <= GetTime() then ${timer} = GetTime() + ${seconds} end\n` +
             `${indent(body)}  end\n`
+          );
+          break;
+        }
+        case "td_while_every": {
+          // Runs straight away when the condition turns true, then every N seconds while it stays true.
+          const seconds = Math.max(0.1, Number(block.getFieldValue("SECONDS")) || 1);
+          const condition = L.valueToCode(block, "COND", O.NONE) || "false";
+          const timer = `td_every[${++everyCount}]`;
+          state.push(`${timer} = 0`);
+          tick.push(
+            `  if ${condition} then\n` +
+            `    if GetTime() >= ${timer} then\n` +
+            `      ${timer} = GetTime() + ${seconds}\n` +
+            `${indent(indent(body))}    end\n` +
+            "  else\n" +
+            `    ${timer} = 0\n` +
+            "  end\n"
           );
           break;
         }
@@ -749,6 +1048,33 @@ end`);
       state.push("td_slowmo = 0");
       afterEvents.push("  if GetTime() < td_slowmo then SetTimeScale(0.25) end\n");
     }
+    if (needs.has("beams")) {
+      state.push("td_beams = {}");
+      afterEvents.push(
+        "  for i = #td_beams, 1, -1 do\n" +
+        "    local beam = td_beams[i]\n" +
+        "    if GetTime() > beam.time then\n" +
+        "      table.remove(td_beams, i)\n" +
+        "    else\n" +
+        "      DrawLine(beam.from, beam.to, beam.r, beam.g, beam.b)\n" +
+        "      if beam.light > 0 then PointLight(beam.to, beam.r, beam.g, beam.b, beam.light) end\n" +
+        "    end\n" +
+        "  end\n"
+      );
+    }
+    if (needs.has("powers")) {
+      state.push("td_powers = {}");
+      afterEvents.push(
+        '  if td_powers.jump then SetPlayerParam("JumpSpeed", 12) end\n' +
+        "  if td_powers.speed then SetPlayerWalkingSpeed(14) end\n"
+      );
+    }
+    if (needs.has("zoom")) {
+      state.push("td_zoom = 1");
+      afterEvents.push("  if td_zoom > 1 then SetCameraFov(90 / td_zoom) end\n");
+    }
+    if (needs.has("frozen")) state.push("td_frozen = {}");
+    if (needs.has("shots")) state.push("td_lastShot = 0");
     if (needs.has("lights")) {
       state.push("td_lights = {}");
       afterEvents.push(
@@ -774,8 +1100,12 @@ end`);
     if (unused) parts.push(`-- ${B.unused_comment}`);
     if (state.length) parts.push(state.join("\n"));
     if (helpers) parts.push(helpers);
-    parts.push(`function init()\n${init.join("")}end`);
-    parts.push(`function tick(dt)\n${everyFrame.join("")}${tick.join("")}${afterEvents.join("")}end`);
+    if (top.length) parts.push(top.join("\n\n"));
+    // A mod made only of Lua code may have its own init and tick, so empty ones aren't added then.
+    const initCode = init.join("");
+    const tickCode = everyFrame.join("") + tick.join("") + afterEvents.join("");
+    if (initCode || !top.length) parts.push(`function init()\n${initCode}end`);
+    if (tickCode || !top.length) parts.push(`function tick(dt)\n${tickCode}end`);
     if (showsText) {
       // A mod with a tool only shows its words while you hold one of its tools, so many mods at once
       // don't cover the screen. A mod without a tool fades its words out 4 seconds after they last changed.
@@ -841,8 +1171,46 @@ end`);
     }
   };
 
+  // Which things the mod's "shoot a ..." blocks shoot, so main.js can put their models in the zip.
+  window.shootThings = (workspace) => {
+    const things = new Set();
+    for (const b of workspace.getBlocksByType("td_shoot_object", false)) {
+      if (b.isEnabled() && !b.getInheritedDisabled()) things.add(b.getFieldValue("THING"));
+    }
+    return things;
+  };
+
+  // Lua typed by the kid: a warning on the block when it has a mistake, so the mod doesn't break in the game.
+  // window.luaparse is static/js/vendor/luaparse.js; without it there are just no warnings.
+  window.warnLuaCode = (workspace) => {
+    const parse = window.luaparse && window.luaparse.parse;
+    let lua = null;
+    for (const b of workspace.getAllBlocks(false)) {
+      if (!["td_lua", "td_lua_value", "td_lua_top"].includes(b.type)) continue;
+      const code = String(b.getFieldValue("CODE") || "");
+      let warning = null;
+      if (parse) {
+        try {
+          parse(b.type === "td_lua_value" ? `return (${code.trim() || "nil"})` : code, { luaVersion: "5.1" });
+        } catch (error) {
+          warning = B.lua_mistake.replace("%1", error.message);
+        }
+      }
+      if (!warning && b.type === "td_lua_top") {
+        // Teardown runs init, tick and draw for the other blocks too, and a mod can only have one of each.
+        const names = [...code.matchAll(/^\s*function\s+(init|tick|draw|update)\s*\(/gm)].map((m) => m[1]);
+        if (names.length) {
+          lua = lua ?? window.buildLua(workspace);
+          const clash = names.filter((name) => lua.split(`\nfunction ${name}(`).length > 2);
+          if (clash.length) warning = B.lua_clash.replace("%1", clash.join(", "));
+        }
+      }
+      b.setWarningText(warning);
+    }
+  };
+
   window.hasEventBlocks = (workspace) =>
-    workspace.getTopBlocks(false).some((b) => EVENT_TYPES.has(b.type) && b.isEnabled());
+    workspace.getTopBlocks(false).some((b) => (EVENT_TYPES.has(b.type) || b.type === "td_lua_top") && b.isEnabled());
 
   const shadowPlace = { shadow: { type: "td_look_point" } };
   const num = (n) => ({ shadow: { type: "math_number", fields: { NUM: n } } });
@@ -858,6 +1226,7 @@ end`);
         block("td_when_key"),
         block("td_when_start"),
         block("td_every_seconds"),
+        block("td_while_every", { COND: { block: { type: "td_key_held", fields: { KEY: "shift" } } } }),
         block("td_every_frame"),
       ]),
       category("actions", COLOURS.actions, [
@@ -869,6 +1238,9 @@ end`);
         block("td_shake"),
         block("td_sound"),
         block("td_message", { TEXT: shadowText(B.message_default) }),
+        block("td_shoot_object", { SPEED: num(30) }),
+        block("td_laser"),
+        block("td_lightning", { WHERE: shadowPlace }),
       ]),
       category("player", COLOURS.player, [
         block("td_launch", { POWER: num(10) }),
@@ -882,6 +1254,10 @@ end`);
         block("td_speed"),
         block("td_key_held"),
         block("td_on_ground"),
+        block("td_power"),
+        block("td_zoom", { ZOOM: num(4) }),
+        block("td_in_car"),
+        block("td_boost_car", { POWER: num(10) }),
       ]),
       category("places", COLOURS.places, [
         block("td_look_point"),
@@ -889,6 +1265,7 @@ end`);
         block("td_in_front", { DIST: num(3) }),
         block("td_above", { DIST: num(2), WHERE: shadowPlace }),
         block("td_random_near", { DIST: num(5), WHERE: shadowPlace }),
+        block("td_last_shot"),
       ]),
       { kind: "sep" },
       {
@@ -931,6 +1308,9 @@ end`);
             block("td_delete_thing"),
             block("td_spawn_box", { SIZE: num(1), WHERE: shadowPlace }),
             block("td_looking_at_thing"),
+            block("td_force", { DIST: num(10), WHERE: shadowPlace, POWER: num(10) }),
+            block("td_throw_held", { POWER: num(20) }),
+            block("td_freeze"),
             block("td_gravity"),
           ]),
           category("effects", COLOURS.effects, [
@@ -938,6 +1318,12 @@ end`);
             block("td_lights_off"),
             block("td_particles", { WHERE: shadowPlace }),
             block("td_rain"),
+            block("td_weather"),
+          ]),
+          category("code", COLOURS.code, [
+            block("td_lua"),
+            block("td_lua_value"),
+            block("td_lua_top"),
           ]),
           { kind: "category", name: C.my_blocks, categorystyle: "procedure_category", custom: "PROCEDURE", toolboxitemid: "my_blocks" },
         ],
@@ -960,7 +1346,11 @@ end`);
     td_screen_text: "screen_text", td_clear_screen: "clear_screen", td_filter: "filter",
     td_push_thing: "push_thing", td_delete_thing: "delete_thing", td_spawn_box: "spawn_box",
     td_looking_at_thing: "looking_at_thing", td_gravity: "gravity",
-    td_light: "light", td_lights_off: "lights_off", td_particles: "particles", td_rain: "rain",
+    td_light: "light", td_lights_off: "lights_off", td_particles: "particles", td_rain: "rain", td_weather: "weather",
+    td_while_every: "while_every", td_shoot_object: "shoot_object", td_laser: "laser", td_lightning: "lightning",
+    td_power: "power", td_zoom: "zoom", td_in_car: "in_car", td_boost_car: "boost_car", td_last_shot: "last_shot",
+    td_force: "force", td_throw_held: "throw_held", td_freeze: "freeze",
+    td_lua: "lua_code", td_lua_value: "lua_value", td_lua_top: "lua_top",
     controls_if: "if", logic_compare: "compare", logic_operation: "and_or", logic_negate: "not",
     logic_boolean: "true_false", controls_repeat_ext: "repeat", math_number: "number",
     math_arithmetic: "arithmetic", math_random_int: "random", text: "text", text_join: "join",

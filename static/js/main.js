@@ -112,6 +112,7 @@
     $("mod-name").value = info.name || T.mod_name_default;
     $("mod-author").value = info.author || "";
     $("mod-description").value = info.description || "";
+    workspace.clearUndo();
   }
 
   function startFresh() {
@@ -120,6 +121,7 @@
     $("mod-name").value = T.mod_name_default;
     $("mod-author").value = "";
     $("mod-description").value = "";
+    workspace.clearUndo();
   }
 
   try {
@@ -154,6 +156,7 @@
   workspace.addChangeListener((event) => {
     if (event.isUiEvent) return;
     window.warnSameToolNames(workspace);
+    window.warnLuaCode(workspace);
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       writeStorage(currentProject());
@@ -211,6 +214,40 @@
     }
   });
 
+  // ---- Examples: ready-made mods to open and change ----
+
+  const examplesDialog = $("examples-dialog");
+  for (const example of window.EXAMPLES || []) {
+    const words = window.APP.t.examples[example.id];
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "example";
+    const name = document.createElement("strong");
+    name.textContent = words.name;
+    const stars = document.createElement("span");
+    stars.className = "stars";
+    stars.setAttribute("aria-label", `${example.stars}/5`);
+    stars.innerHTML = "★".repeat(example.stars) + `<span class="off">${"★".repeat(5 - example.stars)}</span>`;
+    const desc = document.createElement("small");
+    desc.textContent = words.desc;
+    button.append(name, stars, desc);
+    button.addEventListener("click", () => {
+      if (!confirm(T.examples_confirm)) return;
+      // The example has no author, so keep the name the player already typed.
+      const author = $("mod-author").value;
+      loadProject(example.project());
+      $("mod-author").value = author;
+      window.arrangeExample(workspace);
+      workspace.clearUndo();
+      writeStorage(currentProject());
+      examplesDialog.close();
+      // Start at the top left, where the example's first block is.
+      workspace.scroll(0, 0);
+    });
+    $("examples-list").append(button);
+  }
+  $("btn-examples").addEventListener("click", () => examplesDialog.showModal());
+
   // ---- Language ----
 
   document.querySelectorAll("#lang-switch [data-lang]").forEach((button) => {
@@ -243,15 +280,32 @@
   });
   $("download-cancel").addEventListener("click", () => dialog.close());
 
-  let defaultVox = null;
+  const models = new Map();
 
-  async function loadDefaultVox() {
-    if (!defaultVox) {
-      const response = await fetch(window.APP.defaultVox);
-      if (!response.ok) throw new Error(`tool model: ${response.status}`);
-      defaultVox = new Uint8Array(await response.arrayBuffer());
+  async function loadModel(url) {
+    if (!models.has(url)) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`model ${url}: ${response.status}`);
+      models.set(url, new Uint8Array(await response.arrayBuffer()));
     }
-    return defaultVox;
+    return models.get(url);
+  }
+
+  const loadDefaultVox = () => loadModel(window.APP.defaultVox);
+
+  // The models for the mod's "shoot a ..." blocks. Returns null when "my own model" has no file picked.
+  async function shootModels() {
+    const files = [];
+    for (const thing of window.shootThings(workspace)) {
+      if (thing === "my_model") {
+        const file = $("mod-shoot-vox").files[0];
+        if (!file) return null;
+        files.push({ path: "vox/my_model.vox", data: new Uint8Array(await file.arrayBuffer()) });
+      } else {
+        files.push({ path: `vox/${thing}.vox`, data: await loadModel(`${window.APP.shootVox}${thing}.vox`) });
+      }
+    }
+    return files;
   }
 
   $("download-form").addEventListener("submit", async (event) => {
@@ -273,12 +327,18 @@
     const hasTool = workspace.getTopBlocks(false).some((b) => b.type === "td_tool" && b.isEnabled());
     try {
       const vox = voxFile ? new Uint8Array(await voxFile.arrayBuffer()) : null;
+      const extraFiles = await shootModels();
+      if (!extraFiles) {
+        showError("no_shoot_vox");
+        return;
+      }
       const { bytes } = window.Modpack.buildModZip({
         ...modInfo(),
         lua,
         vox,
         hasTool,
         defaultVox: hasTool && !vox ? await loadDefaultVox() : null,
+        extraFiles,
       });
       downloadBlob(new Blob([bytes], { type: "application/zip" }), `${fileSlug()}.zip`);
       writeStorage(currentProject());
@@ -291,6 +351,30 @@
         showError("zip_failed");
       }
     }
+  });
+
+  // ---- Lua code blocks: a big text box to type the code in ----
+
+  const luaDialog = $("lua-dialog");
+  const luaCode = $("lua-code");
+  let luaDone = null;
+  window.editLuaCode = (code, done) => {
+    luaCode.value = code;
+    luaDone = done;
+    luaDialog.showModal();
+    luaCode.focus();
+  };
+  // Tab puts in two spaces instead of leaving the box.
+  luaCode.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab" || event.shiftKey) return;
+    event.preventDefault();
+    luaCode.setRangeText("  ", luaCode.selectionStart, luaCode.selectionEnd, "end");
+  });
+  $("lua-cancel").addEventListener("click", () => luaDialog.close());
+  luaDialog.addEventListener("close", () => {
+    if (luaDialog.returnValue === "done" && luaDone) luaDone(luaCode.value);
+    luaDialog.returnValue = "";
+    luaDone = null;
   });
 
   // ---- Tutorial video: opens by itself on the first visit only ----

@@ -12,7 +12,7 @@ import pytest
 
 from app import TRANSLATIONS, app
 from build_static import build
-from modpack import VOX_PATH, build_default_vox
+from modpack import SHOOT_DIR, VOX_PATH, build_default_vox, build_shoot_models
 
 LUA = 'function init()\nend\n\nfunction tick(dt)\nend\n'
 
@@ -77,6 +77,7 @@ def run_modpack_js(**options):
 const M = require(process.argv[1]);
 const o = JSON.parse(require("fs").readFileSync(0, "utf8"));
 for (const k of ["vox", "defaultVox"]) if (o[k]) o[k] = Uint8Array.from(Buffer.from(o[k], "base64"));
+for (const f of o.extraFiles || []) f.data = Uint8Array.from(Buffer.from(f.data, "base64"));
 try {
   process.stdout.write(JSON.stringify({ zip: Buffer.from(M.buildModZip(o).bytes).toString("base64") }));
 } catch (e) {
@@ -86,6 +87,8 @@ try {
     for key in ("vox", "defaultVox"):
         if options.get(key) is not None:
             options[key] = base64.b64encode(options[key]).decode()
+    for file in options.get("extraFiles", []):
+        file["data"] = base64.b64encode(file["data"]).decode()
     result = subprocess.run([NODE, "-e", script, str(MODPACK_JS)], input=json.dumps(options),
                             capture_output=True, text=True, check=True)
     out = json.loads(result.stdout)
@@ -238,3 +241,62 @@ def test_tutorial_popup_needs_a_video(client, monkeypatch):
     page = client.get("/").get_data(as_text=True)
     assert 'id="tutorial-dialog"' in page
     assert "youtube-nocookie.com/embed/abc123XYZ_-" in page
+
+
+def test_shoot_model_files_match_the_models():
+    # static/vox/shoot/*.vox are what the browser puts in the zip. Run `python modpack.py` after changing them.
+    models = build_shoot_models()
+    assert sorted(models) == ["ball", "barrel", "brick", "crate", "wrecking_ball"]
+    for name, vox in models.items():
+        assert (SHOOT_DIR / f"{name}.vox").read_bytes() == vox
+        start = vox.index(b"XYZI") + 12
+        count = struct.unpack_from("<i", vox, start)[0]
+        # Palette indices 1-8 are glass in Teardown.
+        assert count and min(vox[start + 4 + i * 4 + 3] for i in range(count)) > 8, name
+
+
+def test_shoot_block_offers_every_model():
+    things = re.findall(r'\[B\.thing_\w+, "(\w+)"\]', BLOCKS_JS)
+    assert sorted(things) == sorted(list(build_shoot_models()) + ["my_model"])
+
+
+def test_zip_adds_shoot_models():
+    ball = build_shoot_models()["ball"]
+    data, _ = run_modpack_js(name="Ball", lua=LUA, hasTool=False, extraFiles=[{"path": "vox/ball.vox", "data": ball}])
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        assert zf.read("ball/vox/ball.vox") == ball
+    _, error = run_modpack_js(name="Ball", lua=LUA, hasTool=False, extraFiles=[{"path": "vox/x.vox", "data": b"nope"}])
+    assert error == "not_vox"
+
+
+EXAMPLES_JS = Path(__file__).resolve().parent.parent / "static" / "js" / "examples.js"
+STANDARD_BLOCKS = {"controls_if", "controls_repeat_ext", "logic_compare", "math_number", "math_change", "text",
+                   "text_join", "variables_get", "variables_set", "procedures_defnoreturn", "procedures_callnoreturn"}
+
+
+@pytest.mark.parametrize("lang", ["en", "pl"])
+def test_examples_use_real_blocks_and_text(lang):
+    if not NODE:
+        pytest.skip("Node.js is not installed")
+    # Runs examples.js with the page's words, and fails on any word the translations are missing.
+    script = """
+global.window = { APP: { t: JSON.parse(require("fs").readFileSync(0, "utf8")) } };
+require(process.argv[1]);
+const check = (value, path) => {
+  if (value === undefined) throw new Error("missing text at " + path);
+  if (value && typeof value === "object") for (const [k, v] of Object.entries(value)) check(v, path + "." + k);
+};
+const out = window.EXAMPLES.map((e) => { const p = e.project(); check(p, e.id); return { id: e.id, stars: e.stars, project: p }; });
+process.stdout.write(JSON.stringify(out));
+"""
+    result = subprocess.run([NODE, "-e", script, str(EXAMPLES_JS)], input=json.dumps(TRANSLATIONS[lang]),
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    examples = json.loads(result.stdout)
+    assert [e["stars"] for e in examples] == [1, 2, 3, 4, 5]
+    assert {e["id"] for e in examples} == set(TRANSLATIONS[lang]["examples"])
+    types = set(re.findall(r'"type": "(\w+)"', json.dumps([e["project"] for e in examples])))
+    assert types - defined_blocks() - STANDARD_BLOCKS == set()
+    for e in examples:
+        assert e["project"]["format"] == "teardown-mod-maker"
+        assert e["project"]["info"]["name"] == TRANSLATIONS[lang]["examples"][e["id"]]["name"]
