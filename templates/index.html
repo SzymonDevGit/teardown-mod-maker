@@ -14,8 +14,7 @@
       }
     } catch (e) {}
   </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Barlow+Condensed:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/fonts.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -58,6 +57,7 @@
 
   <footer class="hint-bar">
     <span><kbd>T</kbd> {{ t.app.help_hint }}</span>
+    <a class="privacy-link" href="{{ privacy_url }}" data-term="privacy">{{ t.app.privacy }}</a>
     <a class="discord-link" href="{{ discord_url }}" target="_blank" rel="noopener" data-term="discord">{{ t.app.discord }}</a>
     <nav class="other-work" aria-label="{{ t.app.other_work }}" data-term="other_work">
       <strong>{{ t.app.other_work }}</strong>
@@ -107,7 +107,11 @@
       <h2>{{ t.app.tutorial_title }}</h2>
       <p class="muted">{{ t.app.tutorial_note }}</p>
       <div class="video">
-        <iframe id="tutorial-video" title="{{ t.app.tutorial }}" data-src="https://www.youtube-nocookie.com/embed/{{ tutorial_video_id }}?rel=0"
+        <div id="tutorial-gate" class="video-gate">
+          <p>{{ t.app.tutorial_consent }}</p>
+          <button type="button" id="tutorial-play" class="btn btn-primary">{{ t.app.tutorial_play }}</button>
+        </div>
+        <iframe id="tutorial-video" hidden title="{{ t.app.tutorial }}" data-src="https://www.youtube-nocookie.com/embed/{{ tutorial_video_id }}?rel=0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
       </div>
@@ -153,15 +157,15 @@
       pages: {{ pages|tojson }},
       defaultVox: {{ url_for('static', filename='vox/tool.vox')|tojson }},
       shootVox: {{ url_for('static', filename='vox/shoot/')|tojson }},
-      blocklyMedia: "https://unpkg.com/blockly@{{ blockly_version }}/media/"
+      blocklyMedia: {{ url_for('static', filename='js/vendor/blockly/media/')|tojson }}
     };
   </script>
-  <script src="https://unpkg.com/blockly@{{ blockly_version }}/blockly_compressed.js"></script>
-  <script src="https://unpkg.com/blockly@{{ blockly_version }}/blocks_compressed.js"></script>
-  <script src="https://unpkg.com/blockly@{{ blockly_version }}/lua_compressed.js"></script>
-  <script src="https://unpkg.com/blockly@{{ blockly_version }}/msg/{{ lang }}.js"></script>
+  <script src="{{ url_for('static', filename='js/vendor/blockly/blockly_compressed.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/blockly/blocks_compressed.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/blockly/lua_compressed.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/blockly/msg/' ~ lang ~ '.js') }}"></script>
   <script>
-    // Without Blockly (unpkg.com blocked or down) nothing else works, so say so instead of showing a blank page.
+    // Without Blockly (its files failed to load) nothing else works, so say so instead of showing a blank page.
     if (!window.Blockly || !window.lua) {
       const box = document.getElementById("workspace");
       box.textContent = window.APP.t.app.load_failed;
