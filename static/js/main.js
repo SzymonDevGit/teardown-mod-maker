@@ -455,11 +455,20 @@
   const tutorial = $("tutorial-dialog");
   if (tutorial) {
     const video = $("tutorial-video");
+    const gate = $("tutorial-gate");
     const TUTORIAL_KEY = "tmm.tutorialSeen";
+    // The video comes from YouTube, which can store data in the browser, so nothing loads from
+    // YouTube until the player presses Play (UK cookie rules: ask first).
     const openTutorial = () => {
-      video.src = video.dataset.src;
+      gate.hidden = false;
+      video.hidden = true;
       tutorial.showModal();
     };
+    $("tutorial-play").addEventListener("click", () => {
+      video.src = video.dataset.src + "&autoplay=1";
+      video.hidden = false;
+      gate.hidden = true;
+    });
     // Clearing the src stops the video when the popup closes.
     tutorial.addEventListener("close", () => video.removeAttribute("src"));
     $("btn-tutorial").addEventListener("click", openTutorial);

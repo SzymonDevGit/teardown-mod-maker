@@ -241,6 +241,28 @@ def test_tutorial_popup_needs_a_video(client, monkeypatch):
     page = client.get("/").get_data(as_text=True)
     assert 'id="tutorial-dialog"' in page
     assert "youtube-nocookie.com/embed/abc123XYZ_-" in page
+    # Nothing loads from YouTube until Play is pressed: the address is only in data-src.
+    assert ' src="https://www.youtube-nocookie.com' not in page
+    assert 'id="tutorial-play"' in page
+
+
+def test_privacy_page_in_both_languages_and_linked(client):
+    for editor, privacy, heading in (("/", "/privacy/", "Privacy"), ("/pl/", "/pl/privacy/", "Prywatność")):
+        assert f'href="{privacy}"' in client.get(editor).get_data(as_text=True)
+        page = client.get(privacy).get_data(as_text=True)
+        assert f"<h1>{heading}</h1>" in page
+        assert "mailto:info@cheltenhamdata.co.uk" in page
+    assert client.get("/de/privacy/").status_code == 404
+
+
+def test_nothing_loads_from_other_sites(client):
+    # UK privacy rules: no third-party requests (fonts, scripts) before the visitor asks for them.
+    import re
+
+    for path in ("/", "/pl/", "/privacy/", "/pl/privacy/"):
+        page = client.get(path).get_data(as_text=True)
+        assert not re.search(r'<(script|link)[^>]+(src|href)="https?://', page), path
+        assert "fonts.googleapis" not in page and "unpkg.com" not in page
 
 
 def test_shoot_model_files_match_the_models():

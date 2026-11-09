@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t.app.privacy }} · {{ t.app.title }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/fonts.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="doc-page">
+  <main class="doc">
+    <p><a href="{{ editor_url }}">← {{ t.app.title }}</a>
+      · {% for code, url in pages.items() %}{% if code != lang %}<a href="{{ url }}" lang="{{ code }}">{{ {"en": "English", "pl": "Polski"}[code] }}</a>{% endif %}{% endfor %}</p>
+{% if lang == "pl" %}
+    <h1>Prywatność</h1>
+    <p class="muted">Ostatnia zmiana: {{ updated }}</p>
+
+    <h2>W skrócie</h2>
+    <p>Teardown Mod Maker działa w całości w twojej przeglądarce. Nie ma kont, reklam, analityki ani plików cookie. Twoje klocki i mody nie są wysyłane do nikogo: zostają na twoim urządzeniu, dopóki sam ich nie zapiszesz lub nie pobierzesz.</p>
+
+    <h2>Kto prowadzi tę stronę</h2>
+    <p>Teardown Mod Maker jest częścią szy.monster i prowadzi go Szymon. W sprawach prywatności i twoich danych napisz na <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+
+    <h2>Co zapisuje się w twojej przeglądarce</h2>
+    <p>Strona używa pamięci przeglądarki (localStorage), a nie plików cookie. Te dane nigdy nie opuszczają twojego urządzenia:</p>
+    <ul>
+      <li><strong>Twój projekt</strong> (klocki i opis moda), żeby nie zniknął po odświeżeniu strony.</li>
+      <li><strong>Wybrany język</strong>, żeby strona otworzyła się w nim następnym razem.</li>
+      <li><strong>Czy poradnik był już pokazany</strong>, żeby nie wyskakiwał przy każdej wizycie.</li>
+    </ul>
+    <p>Zostają, dopóki ich nie usuniesz. Żeby je usunąć, wyczyść dane tej strony w ustawieniach przeglądarki (wtedy stracisz też niezapisane klocki).</p>
+
+    <h2>Inne firmy</h2>
+    <ul>
+      <li><strong>Cloudflare</strong> udostępnia tę stronę. Jak każdy serwer widzi twój adres IP i dane przeglądarki, żeby wysłać ci stronę i chronić ją przed atakami. Zobacz <a href="https://www.cloudflare.com/privacypolicy/">politykę prywatności Cloudflare</a>.</li>
+      <li><strong>YouTube (Google)</strong>: film z poradnikiem wczytuje się dopiero, gdy naciśniesz Odtwórz. Wtedy YouTube może zapisać dane w twojej przeglądarce. Zobacz <a href="https://policies.google.com/privacy">politykę prywatności Google</a>.</li>
+      <li><strong>Discord</strong>: tylko jeśli klikniesz link do naszego serwera.</li>
+    </ul>
+    <p>Czcionki i edytor klocków (Blockly) są na tym samym serwerze, więc nic nie wczytuje się od innych firm, dopóki sam czegoś nie klikniesz.</p>
+
+    <h2>Twoje prawa</h2>
+    <p>Zgodnie z brytyjskim RODO (UK GDPR) masz prawo zapytać, jakie dane o tobie mamy, poprawić je lub usunąć. Ponieważ niczego o tobie nie przechowujemy, zwykle wystarczy wyczyścić dane strony w przeglądarce. Jeśli masz pytanie, napisz na <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>. Możesz też złożyć skargę do brytyjskiego urzędu ochrony danych (<a href="https://ico.org.uk/make-a-complaint/">ICO</a>).</p>
+{% else %}
+    <h1>Privacy</h1>
+    <p class="muted">Last updated: {{ updated }}</p>
+
+    <h2>The short version</h2>
+    <p>Teardown Mod Maker runs entirely in your browser. There are no accounts, ads, analytics or cookies. Your blocks and mods aren't sent to anyone: they stay on your device until you save or download them yourself.</p>
+
+    <h2>Who runs this site</h2>
+    <p>Teardown Mod Maker is part of szy.monster and is run by Szymon. For anything about privacy or your data, email <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+
+    <h2>What is kept in your browser</h2>
+    <p>The site uses your browser's storage (localStorage), not cookies. None of it ever leaves your device:</p>
+    <ul>
+      <li><strong>Your project</strong> (your blocks and mod details), so it isn't lost when you reload the page.</li>
+      <li><strong>Your language</strong>, so the site opens in it next time.</li>
+      <li><strong>Whether you've seen the tutorial</strong>, so it doesn't pop up on every visit.</li>
+    </ul>
+    <p>These stay until you remove them. To remove them, clear this site's data in your browser settings (this also clears any blocks you haven't saved).</p>
+
+    <h2>Other companies</h2>
+    <ul>
+      <li><strong>Cloudflare</strong> hosts this site. Like any web server it sees your IP address and browser details to send you the page and protect it from attacks. See <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's privacy policy</a>.</li>
+      <li><strong>YouTube (Google)</strong>: the tutorial video only loads when you press Play. YouTube can then store data in your browser. See <a href="https://policies.google.com/privacy">Google's privacy policy</a>.</li>
+      <li><strong>Discord</strong>: only if you click the link to our server.</li>
+    </ul>
+    <p>The fonts and the block editor (Blockly) come from this site's own server, so nothing loads from other companies unless you click something.</p>
+
+    <h2>Your rights</h2>
+    <p>Under UK data protection law (UK GDPR) you can ask what data we hold about you, and have it corrected or deleted. Because we don't keep anything about you, clearing this site's data in your browser is usually all that's needed. If you have a question, email <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>. You can also complain to the UK's data protection regulator, the <a href="https://ico.org.uk/make-a-complaint/">ICO</a>.</p>
+{% endif %}
+  </main>
+</body>
+</html>
